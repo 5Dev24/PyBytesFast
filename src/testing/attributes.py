@@ -71,22 +71,21 @@ class ParentAttribute(Attribute): pass
 
 def Test(*args):
 	for func in args:
-		try:
-			func()
-		except TypeError:
-			func(None)
+		print(f"{func.__name__}: Invoke:                           ", end=" ")
 
-		print(f"{func.__name__}: func.__dict__:", func.__dict__)
+		func(*(func.__code__.co_argcount*(None,)))
 
-		print(f"{func.__name__}: Attribute.GetAttributes:", Attribute.GetAttributes(func))
-		print(f"{func.__name__}: Attribute.GetSameAttributes:", Attribute.GetSameAttributes(func))
-		print(f"{func.__name__}: Attribute.HasAttribute:", Attribute.HasAttribute(func))
-		print(f"{func.__name__}: Attribute.HasSameAttribute:", Attribute.HasSameAttribute(func))
+		print(f"{func.__name__}: func.__dict__:                    ", func.__dict__)
 
-		print(f"{func.__name__}: ParentAttribute.GetAttributes:", ParentAttribute.GetAttributes(func))
+		print(f"{func.__name__}: Attribute.GetAttributes:          ", Attribute.GetAttributes(func))
+		print(f"{func.__name__}: Attribute.GetSameAttributes:      ", Attribute.GetSameAttributes(func))
+		print(f"{func.__name__}: Attribute.HasAttribute:           ", Attribute.HasAttribute(func))
+		print(f"{func.__name__}: Attribute.HasSameAttribute:       ", Attribute.HasSameAttribute(func))
+
+		print(f"{func.__name__}: ParentAttribute.GetAttributes:    ", ParentAttribute.GetAttributes(func))
 		print(f"{func.__name__}: ParentAttribute.GetSameAttributes:", ParentAttribute.GetSameAttributes(func))
-		print(f"{func.__name__}: ParentAttribute.HasAttribute", ParentAttribute.HasAttribute(func))
-		print(f"{func.__name__}: ParentAttribute.HasSameAttribute:", ParentAttribute.HasSameAttribute(func))
+		print(f"{func.__name__}: ParentAttribute.HasAttribute:     ", ParentAttribute.HasAttribute(func))
+		print(f"{func.__name__}: ParentAttribute.HasSameAttribute: ", ParentAttribute.HasSameAttribute(func))
 
 @Attribute(0, this="lonely")
 def testA():
@@ -115,7 +114,8 @@ class TestC:
 	def testF(self):
 		print("testF")
 
-cFuncs = Attribute.GetMethods(TestC)
-cParentFuncs = ParentAttribute.GetMethods(TestC)
+if __name__ == "__main__":
+	cFuncs = Attribute.GetMethods(TestC)
+	cParentFuncs = ParentAttribute.GetMethods(TestC)
 
-Test(testA, testB, *cFuncs, *cParentFuncs)
+	Test(testA, testB, *cFuncs, *cParentFuncs)
