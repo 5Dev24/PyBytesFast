@@ -10,6 +10,27 @@ ArgumentsNeeded = {
 	75: 2, 76: 2
 }
 
+"""
+CodeType(
+	code.co_argcount,
+	code.co_posonlyargcount,
+	code.co_kwonlyargcount,
+	code.co_nlocals,
+	code.co_stacksize,
+	code.co_flags,
+	code.co_code,
+	code.co_consts,
+	code.co_names,
+	code.co_varnames,
+	code.co_filename,
+	code.co_name,
+	code.co_firstlineno,
+	code.co_lnotab,
+	code.co_freevars,
+	code.co_cellvars
+)
+"""
+
 class Instruct:
 
 	INDEX = 0
@@ -38,7 +59,7 @@ class Function:
 	def __init__(self, instructs: list, init_code: CodeType = None):
 		self.instructs = instructs
 		self.init_code = init_code
-		self.returns = self.single_use_vars = self.constant_opts = self.dead_vars = None
+		self.returns = self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
 		self.__cycle()
 
 	def __cycle(self):
@@ -58,6 +79,7 @@ class Function:
 		returns = []
 		single_use_vars = []
 		constant_opts = []
+		dead_consts = []
 		dead_vars = []
 
 		for instruct in self.instructs:
@@ -77,23 +99,56 @@ class Function:
 		if self.init_code is not None:
 			for loc in range(self.init_code.co_nlocals):
 				assigns, uses = len(self.__assignments(loc)), len(self.__uses(loc))
-				if assigns == 1 and uses == 1:
+				if assigns == 0 or uses == 0:
+					dead_vars.append(loc)
+
+				elif assigns == 1 and uses == 1:
 					single_use_vars.append(loc)
 
 			for con in range(len(self.init_code.co_consts)):
-				uses =len(self.__uses_const(con))
-				if assigns == 0 or uses == 0:
-					dead_vars.append(con)
+				uses = len(self.__uses_const(con))
+				if uses == 0:
+					dead_consts.append(con)
 
 		self.returns = tuple(returns)
 		self.single_use_vars = tuple(single_use_vars)
 		self.constant_opts = tuple(constant_opts)
+		self.dead_consts = tuple(dead_consts)
 		self.dead_vars = tuple(dead_vars)
 
 	def __optimize(self):
-		print("Dead:", self.dead_vars)
+		print("Dead Vars:", self.dead_vars)
 
-		#TODO: Remove dead
+		if self.init_code is not None:
+			new_vars = list(self.init_code.co_varnames)
+			for var in sorted(self.dead_vars, reverse=True):
+				del new_vars[var] # IndexError!
+
+			if len(new_vars) != len(self.init_code.co_varnames):
+				self.init_code = CodeType(
+					self.init_code.co_argcount,
+					self.init_code.co_posonlyargcount,
+					self.init_code.co_kwonlyargcount,
+					self.init_code.co_nlocals,
+					self.init_code.co_stacksize,
+					self.init_code.co_flags,
+					self.init_code.co_code,
+					self.init_code.co_consts,
+					self.init_code.co_names,
+					tuple(new_vars),
+					self.init_code.co_filename,
+					self.init_code.co_name,
+					self.init_code.co_firstlineno,
+					self.init_code.co_lnotab,
+					self.init_code.co_freevars,
+					self.init_code.co_cellvars
+				)
+
+				return False # Map and Optimize again
+
+		print("Dead Consts:", self.dead_consts)
+
+		#TODO: Remvoe dead
 
 		print("Single:", self.single_use_vars)
 
@@ -103,7 +158,7 @@ class Function:
 			if store.id > 0 and (load_struct := self.__find(store.id - 1, self.__prior(store))) is not None:
 				if load_struct.optcode == 100:
 					singles_to_remove[var] = [store, self.__uses(var)[0], load_struct]
-					print(f"The single use of {var} could be replaced with a LOAD_CONST of {load_struct.arg}")
+					print(f"The single use of {var} will be replaced with a LOAD_CONST of {load_struct.arg}")
 
 		if len(singles_to_remove):
 
@@ -118,7 +173,7 @@ class Function:
 		if self.init_code is not None:
 			print("Const Opts:", self.constant_opts)
 
-			ops_resolved = {}
+			modified = False
 			for instruct in self.constant_opts:
 				args_instructs = [i for i in self.__prior(instruct, 2)[:ArgumentsNeeded[instruct.optcode]] if i.optcode == 100]
 				args = [self.init_code.co_consts[i.arg] for i in args_instructs]
@@ -190,10 +245,19 @@ class Function:
 				elif optcode == 76: # INPLACE_RSHIFT
 					args[1] >>= args[0]
 
+				else:
+					continue
+
+				modified = True
+
 				#TODO: Modify constants, add value and only update args[1]'s value as args[0] is unchanging
 
 				consts = list(self.init_code.co_consts)
 				consts[args_instructs[1].arg] = args[1]
+
+				for _ in range(ArgumentsNeeded[optcode]):
+					self.__removeInstruct(instruct.id - 1)
+
 				if value is not None:
 					if value not in consts:
 						consts.append(value)
@@ -203,19 +267,19 @@ class Function:
 
 					self.__replaceInstruct(instruct.id, Instruct(100, index, give_id = False))
 
-				for i in range(ArgumentsNeeded[optcode]):
-					self.__removeInstruct(instruct.id - i)
+				print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with a {opname[100]} of {index}")
 
-				for i in (
+				self.init_code = CodeType(
 					self.init_code.co_argcount,
+					self.init_code.co_posonlyargcount,
 					self.init_code.co_kwonlyargcount,
 					self.init_code.co_nlocals,
 					self.init_code.co_stacksize,
 					self.init_code.co_flags,
-					self.init_code.co_code,
-					#self.__instructs_to_bytes(),
-					self.init_code.co_consts,
-					#tuple(consts),
+					#self.init_code.co_code,
+					self.__instructs_to_bytes(),
+					#self.init_code.co_consts,
+					tuple(consts),
 					self.init_code.co_names,
 					self.init_code.co_varnames,
 					self.init_code.co_filename,
@@ -224,33 +288,10 @@ class Function:
 					self.init_code.co_lnotab,
 					self.init_code.co_freevars,
 					self.init_code.co_cellvars
-				):
-					print(type(i))
-
-				# Complains about getting bytes instead of an integer
-
-				self.init_code = CodeType(
-					self.init_code.co_argcount,
-					self.init_code.co_kwonlyargcount,
-					self.init_code.co_nlocals,
-					self.init_code.co_stacksize,
-					self.init_code.co_flags,
-					self.init_code.co_code,
-					#self.__instructs_to_bytes(), ^
-					self.init_code.co_consts,
-					#tuple(consts), ^
-					self.init_code.co_names,
-					self.init_code.co_varnames,
-					self.init_code.co_filename,
-					self.init_code.co_name,
-					self.init_code.co_firstlineno,
-					b"",
-					#self.init_code.co_lnotab, ^
-					self.init_code.co_freevars,
-					self.init_code.co_cellvars
 				)
 
-				#CodeType(int, int, int, int, int, bytes, tuple[any], tuple[str], tuple[str], str, str, int, bytes, tuple[str], tuple[str])
+			if modified:
+				return False # Map and Optimize again
 
 		print("Returns:", self.returns)
 		for ret in self.returns:
@@ -285,7 +326,7 @@ class Function:
 			elif instruct.id > -1 and instruct.id > id: instruct.id -= 1
 
 		i = len(self.instructs) - 1
-		while i > 0:
+		while i >= 0:
 			if self.instructs[i] is None:
 				del self.instructs[i]
 
