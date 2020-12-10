@@ -120,7 +120,8 @@ class Function:
 
 			ops_resolved = {}
 			for instruct in self.constant_opts:
-				args = [self.init_code.co_consts[i.arg] for i in self.__prior(instruct, 2)[:ArgumentsNeeded[instruct.optcode]] if i.optcode == 100]
+				args_instructs = [i for i in self.__prior(instruct, 2)[:ArgumentsNeeded[instruct.optcode]] if i.optcode == 100]
+				args = [self.init_code.co_consts[i.arg] for i in args_instructs]
 				optcode = instruct.optcode
 				value = None
 
@@ -189,14 +190,86 @@ class Function:
 				elif optcode == 76: # INPLACE_RSHIFT
 					args[1] >>= args[0]
 
-				#TODO: Modify constants, add value and args[1] as args[0] is unchanging
+				#TODO: Modify constants, add value and only update args[1]'s value as args[0] is unchanging
+
+				consts = list(self.init_code.co_consts)
+				consts[args_instructs[1].arg] = args[1]
+				if value is not None:
+					if value not in consts:
+						consts.append(value)
+						index = len(consts) - 1
+					else:
+						index = consts.index(value)
+
+					self.__replaceInstruct(instruct.id, Instruct(100, index, give_id = False))
+
+				for i in range(ArgumentsNeeded[optcode]):
+					self.__removeInstruct(instruct.id - i)
+
+				for i in (
+					self.init_code.co_argcount,
+					self.init_code.co_kwonlyargcount,
+					self.init_code.co_nlocals,
+					self.init_code.co_stacksize,
+					self.init_code.co_flags,
+					self.init_code.co_code,
+					#self.__instructs_to_bytes(),
+					self.init_code.co_consts,
+					#tuple(consts),
+					self.init_code.co_names,
+					self.init_code.co_varnames,
+					self.init_code.co_filename,
+					self.init_code.co_name,
+					self.init_code.co_firstlineno,
+					self.init_code.co_lnotab,
+					self.init_code.co_freevars,
+					self.init_code.co_cellvars
+				):
+					print(type(i))
+
+				# Complains about getting bytes instead of an integer
+
+				self.init_code = CodeType(
+					self.init_code.co_argcount,
+					self.init_code.co_kwonlyargcount,
+					self.init_code.co_nlocals,
+					self.init_code.co_stacksize,
+					self.init_code.co_flags,
+					self.init_code.co_code,
+					#self.__instructs_to_bytes(), ^
+					self.init_code.co_consts,
+					#tuple(consts), ^
+					self.init_code.co_names,
+					self.init_code.co_varnames,
+					self.init_code.co_filename,
+					self.init_code.co_name,
+					self.init_code.co_firstlineno,
+					b"",
+					#self.init_code.co_lnotab, ^
+					self.init_code.co_freevars,
+					self.init_code.co_cellvars
+				)
+
+				#CodeType(int, int, int, int, int, bytes, tuple[any], tuple[str], tuple[str], str, str, int, bytes, tuple[str], tuple[str])
 
 		print("Returns:", self.returns)
 		for ret in self.returns:
 			prior: list = self.__prior(ret)
 			assigns: list = self.__assignments(ret.arg, prior)
 
+			#TODO: Clean up variable use in returns
+
 		return True # Terminate
+
+	def __instructs_to_bytes(self, instructs: list = None):
+		if instructs is None: instructs = self.instructs
+
+		output = []
+		for instruct in self.instructs:
+			output.append(instruct.optcode)
+			output.append(instruct.arg)
+
+		return bytes(output)
 
 	def __are_args_const(self, operation: Instruct, instructs: list = None):
 		const_needed = ArgumentsNeeded[operation.optcode]
