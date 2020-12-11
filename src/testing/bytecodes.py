@@ -66,15 +66,10 @@ class Function:
 		self.__cycle()
 
 	def __cycle(self):
-		#print("Pre\n", "=" * 50, "\n", self, "\n", "=" * 50, sep="")
 		ret = False
-		passCount = 0
 		while not ret:
-			passCount += 1
-			print("Pass", passCount)
 			self.__map()
 			ret = self.__optimize()
-			#print("=" * 50, "\n", self, "\n", "=" * 50, sep="")
 
 	def __map(self):
 		returns = []
@@ -262,8 +257,6 @@ class Function:
 			if modified:
 				return False # Map and Optimize again
 
-			del modified
-
 		for ret in self.returns:
 			prior: list = self.__prior(ret)
 			assigns: list = self.__assignments(ret.arg, prior)
@@ -278,7 +271,8 @@ class Function:
 				print(f"Local variable #{var} is unused and thus dead so it will be removed")
 
 				for instruct in self.instructs:
-					if instruct is None: continue
+					if instruct is None:
+						continue
 					if instruct.arg > var and instruct.optcode in (124, 125):
 						instruct.arg -= 1
 
@@ -312,7 +306,9 @@ class Function:
 				print(f"Constant variable #{var} (Value={new_consts[var]}) is unused and thus dead so it will be removed")
 
 				for instruct in self.instructs:
-					if instruct is None: continue
+					if instruct is None:
+						continue
+
 					if instruct.optcode == 100 and instruct.arg > var:
 						instruct.arg -= 1
 
@@ -343,7 +339,8 @@ class Function:
 		return not modified
 
 	def __instructs_to_bytes(self, instructs: list = None):
-		if instructs is None: instructs = self.instructs
+		if instructs is None:
+			instructs = self.instructs
 
 		output = []
 		for instruct in self.instructs:
@@ -360,18 +357,25 @@ class Function:
 	def __removeInstruct(self, id: int):
 		for i in range(len(self.instructs)):
 			instruct = self.instructs[i]
-			if instruct is None: continue
+			if instruct is None:
+				continue
 
-			if instruct.id == id: self.instructs[i] = None
-			elif instruct.id > -1 and instruct.id > id: instruct.id -= 1
+			if instruct.id == id:
+				self.instructs[i] = None
+			elif instruct.id > -1 and instruct.id > id:
+				instruct.id -= 1
 
-		while (i := self.instructs.index(None)) >= 0:
-			del self.instructs[i]
+		try:
+			while (i := self.instructs.index(None)) >= 0:
+				del self.instructs[i]
+		except ValueError:
+			pass
 
 	def __replaceInstruct(self, id: int, replacement: Instruct):
 		for i in range(len(self.instructs)):
 			instruct = self.instructs[i]
-			if instruct is None: continue
+			if instruct is None:
+				continue
 
 			if instruct.id == id:
 				replacement.id = id
@@ -381,6 +385,7 @@ class Function:
 	def __insertInstruct(self, id: int, insert: Instruct):
 		for i in range(len(self.instructs)):
 			instruct = self.instructs[i]
+
 			if instruct.id > id:
 				instruct.id += 1
 			elif instruct.id == id:
@@ -396,27 +401,33 @@ class Function:
 				return instruct
 
 	def __uses_const(self, index: int, instructs: list = None):
-		if instructs is None: instructs = self.instructs
+		if instructs is None:
+			instructs = self.instructs
 
 		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.optcode in (100,)]
 
 	def __assignments(self, index: int, instructs: list = None):
-		if instructs is None: instructs = self.instructs
+		if instructs is None:
+			instructs = self.instructs
 
 		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.optcode in (125,)]
 
 	def __uses(self, index: int, instructs: list = None):
-		if instructs is None: instructs = self.instructs
+		if instructs is None:
+			instructs = self.instructs
 
 		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.optcode in (124,)]
 
 	def __prior(self, final: Instruct, seek: int = 0, instructs: list = None):
-		if instructs is None: instructs = self.instructs
+		if instructs is None:
+			instructs = self.instructs
+
 		found = 0
 		gotten = []
 
 		for instruct in instructs:
-			if instruct is None: continue
+			if instruct is None:
+				continue
 
 			if (seek < 1 or found < seek) and instruct.id < final.id:
 				gotten.append(instruct)
@@ -436,15 +447,36 @@ def speeds(compiled: CodeType, runs: int = 512):
 		stdout = sys.stdout
 		sys.stdout = null
 
-		for _ in range(runs):
+		i = 0
+		while i < runs:
 			start = time()
 			exec(compiled)
 			end = time()
-			speeds.append(end - start)
+
+			delta = end - start
+			if not delta:
+				continue
+
+			speeds.append(delta)
+			i += 1
 
 		sys.stdout = stdout
 
-	return (max(speeds), min(speeds), sum(speeds) / runs)
+	speeds_min = min(speeds)
+	speeds_max = max(speeds)
+	speeds_average = sum(speeds) / runs
+
+	speeds_min_close = speeds_max_close = speeds_average_close = 0
+
+	for speed in speeds:
+		if abs(speeds_max - speed) < 75e-4:
+			speeds_max_close += 1
+		elif abs(speeds_min - speed) < 75e-4:
+			speeds_min_close += 1
+		elif abs(speeds_average - speed) < 375e-9:
+			speeds_average_close += 1
+
+	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close, speeds_average, speeds_average_close)
 
 def main():
 	initial_function = \
@@ -465,7 +497,9 @@ print(test())"""
 	dis(initial_compile)
 	print()
 
-	initial_speeds = speeds(initial_compile)
+	runs = 2048
+
+	initial_speeds = speeds(initial_compile, runs)
 	co_consts = list(initial_compile.co_consts)
 
 	initial_compiled = initial_compile.co_consts[0]
@@ -520,13 +554,13 @@ print(test())"""
 	del initial_compile, co_consts
 
 	print("\nFinal Compiled Code:")
-	dis(initial_compile)
+	dis(final_compile)
 
-	final_speeds = speeds(initial_compile)
+	final_speeds = speeds(final_compile, runs)
 
-	print(f"\n\n\nInitial Speeds:\n\tMin:     {initial_speeds[1] * 1000:0.5f}ms\n\tMax:     {initial_speeds[0] * 1000:0.5f}ms\n\tAverage: {initial_speeds[2] * 10 ** 6:0.5f}μs")
-	print(f"Finals Speeds:\n\tMin:     {final_speeds[1] * 1000:0.5f}ms\n\tMax:     {final_speeds[0] * 1000:0.5f}ms\n\tAverage: {final_speeds[2] * 10 ** 6:0.5f}μs")
-	print(f"Differences:\n\tMin:     {abs(final_speeds[1] - initial_speeds[1]) * 1000:0.5f}ms\n\tMax:     {abs(final_speeds[0] - initial_speeds[0]) * 1000:0.5f}ms\n\tAverage: {abs(final_speeds[2] - initial_speeds[2]) * 10 ** 9:0.5f}ns")
+	print(f"\n\n\nInitial Speeds:\n\tMin:     ({initial_speeds[1]:04d}) {initial_speeds[0] * 1e3:0.5f}ms\n\tMax:     ({initial_speeds[3]:04d}) {initial_speeds[2] * 1e3:0.5f}ms\n\tAverage: ({initial_speeds[5]:04d}) {initial_speeds[4] * 1e3:0.5f}ms")
+	print(f"Finals Speeds:\n\tMin:     ({final_speeds[1]:04d}) {final_speeds[0] * 1e3:0.5f}ms\n\tMax:     ({final_speeds[3]:04d}) {final_speeds[2] * 1e3:0.5f}ms\n\tAverage: ({final_speeds[5]:04d}) {final_speeds[4] * 1e3:0.5f}ms")
+	print(f"Differences:\n\tMin:     {abs(final_speeds[0] - initial_speeds[0]) * 1e6:0.5f}μs\n\tMax:     {abs(final_speeds[2] - initial_speeds[2]) * 1e6:0.5f}μs\n\tAverage: {abs(final_speeds[4] - initial_speeds[4]) * 1e6:0.5f}μs")
 
 if __name__ == "__main__":
 	main()
