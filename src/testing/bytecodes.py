@@ -142,7 +142,7 @@ class Function:
 				args = [self.code.co_consts[i.arg] for i in args_instructs]
 				optcode = instruct.optcode
 				value = None
-				value_set = False
+				value_set = False # Can't check if None as a return could be None
 
 				if optcode == 10: # UNARY_POSITIVE
 					value = +args[0]
@@ -365,12 +365,8 @@ class Function:
 			if instruct.id == id: self.instructs[i] = None
 			elif instruct.id > -1 and instruct.id > id: instruct.id -= 1
 
-		i = len(self.instructs) - 1
-		while i >= 0:
-			if self.instructs[i] is None:
-				del self.instructs[i]
-
-			i -= 1
+		while (i := self.instructs.index(None)) >= 0:
+			del self.instructs[i]
 
 	def __replaceInstruct(self, id: int, replacement: Instruct):
 		for i in range(len(self.instructs)):
@@ -380,6 +376,7 @@ class Function:
 			if instruct.id == id:
 				replacement.id = id
 				self.instructs[i] = replacement
+				break
 
 	def __insertInstruct(self, id: int, insert: Instruct):
 		for i in range(len(self.instructs)):
@@ -450,7 +447,8 @@ def speeds(compiled: CodeType, runs: int = 512):
 	return (max(speeds), min(speeds), sum(speeds) / runs)
 
 def main():
-	initial_function = """def test():
+	initial_function = \
+"""def test():
 	testA = 29
 	testB = 18
 	testC = testA * testB
@@ -468,15 +466,18 @@ print(test())"""
 	print()
 
 	initial_speeds = speeds(initial_compile)
+	co_consts = list(initial_compile.co_consts)
 
 	initial_compiled = initial_compile.co_consts[0]
 	codes: bytes = initial_compiled.co_code
 	instructs: list = [Instruct(codes[i], codes[i + 1]) for i in range(0, len(codes), 2)]
+	del codes
+
 	Instruct.Reset()
 
 	func: Function = Function(instructs, initial_compiled)
+	del instructs
 
-	co_consts = list(initial_compile.co_consts)
 	co_consts[0] = CodeType(
 		func.code.co_argcount,
 		func.code.co_posonlyargcount,
@@ -496,7 +497,9 @@ print(test())"""
 		func.code.co_cellvars
 	)
 
-	initial_compile = CodeType(
+	del func
+
+	final_compile = CodeType(
 		initial_compile.co_argcount,
 		initial_compile.co_posonlyargcount,
 		initial_compile.co_kwonlyargcount,
@@ -514,6 +517,7 @@ print(test())"""
 		initial_compile.co_freevars,
 		initial_compile.co_cellvars
 	)
+	del initial_compile, co_consts
 
 	print("\nFinal Compiled Code:")
 	dis(initial_compile)
