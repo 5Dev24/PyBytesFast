@@ -1,5 +1,8 @@
 from dis import *
 from types import CodeType
+from time import time
+from os import devnull
+import sys
 
 ArgumentsNeeded = {
 	10: 1, 11: 1, 15: 1, 19: 2,
@@ -58,12 +61,12 @@ class Function:
 
 	def __init__(self, instructs: list, init_code: CodeType = None):
 		self.instructs = instructs
-		self.init_code = init_code
+		self.code = init_code
 		self.returns = self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
 		self.__cycle()
 
 	def __cycle(self):
-		print("Pre\n", "=" * 50, "\n", self, "\n", "=" * 50, sep="")
+		#print("Pre\n", "=" * 50, "\n", self, "\n", "=" * 50, sep="")
 		ret = False
 		passCount = 0
 		while not ret:
@@ -71,9 +74,7 @@ class Function:
 			print("Pass", passCount)
 			self.__map()
 			ret = self.__optimize()
-			print("=" * 50, "\n", self, "\n", "=" * 50, sep="")
-
-		#TODO: return modified init_code
+			#print("=" * 50, "\n", self, "\n", "=" * 50, sep="")
 
 	def __map(self):
 		returns = []
@@ -96,16 +97,16 @@ class Function:
 				if self.__are_args_const(instruct, self.__prior(instruct, 2)):
 					constant_opts.append(instruct)
 
-		if self.init_code is not None:
-			for loc in range(self.init_code.co_nlocals):
+		if self.code is not None:
+			for loc in range(len(self.code.co_varnames)):
 				assigns, uses = len(self.__assignments(loc)), len(self.__uses(loc))
 				if assigns == 0 or uses == 0:
 					dead_vars.append(loc)
 
-				elif assigns == 1 and uses == 1:
+				elif assigns == 1:
 					single_use_vars.append(loc)
 
-			for con in range(len(self.init_code.co_consts)):
+			for con in range(1, len(self.code.co_consts)):
 				uses = len(self.__uses_const(con))
 				if uses == 0:
 					dead_consts.append(con)
@@ -117,41 +118,6 @@ class Function:
 		self.dead_vars = tuple(dead_vars)
 
 	def __optimize(self):
-		print("Dead Vars:", self.dead_vars)
-
-		if self.init_code is not None:
-			new_vars = list(self.init_code.co_varnames)
-			for var in sorted(self.dead_vars, reverse=True):
-				del new_vars[var] # IndexError!
-
-			if len(new_vars) != len(self.init_code.co_varnames):
-				self.init_code = CodeType(
-					self.init_code.co_argcount,
-					self.init_code.co_posonlyargcount,
-					self.init_code.co_kwonlyargcount,
-					self.init_code.co_nlocals,
-					self.init_code.co_stacksize,
-					self.init_code.co_flags,
-					self.init_code.co_code,
-					self.init_code.co_consts,
-					self.init_code.co_names,
-					tuple(new_vars),
-					self.init_code.co_filename,
-					self.init_code.co_name,
-					self.init_code.co_firstlineno,
-					self.init_code.co_lnotab,
-					self.init_code.co_freevars,
-					self.init_code.co_cellvars
-				)
-
-				return False # Map and Optimize again
-
-		print("Dead Consts:", self.dead_consts)
-
-		#TODO: Remvoe dead
-
-		print("Single:", self.single_use_vars)
-
 		singles_to_remove = {}
 		for var in self.single_use_vars:
 			store = self.__assignments(var)[0]
@@ -163,54 +129,60 @@ class Function:
 		if len(singles_to_remove):
 
 			for var, values in singles_to_remove.items():
-				#self.__replaceInstruct(values[2].id, Instruct(100, values[2].arg, give_id = False))
+				self.__replaceInstruct(values[2].id, Instruct(100, values[2].arg, give_id = False))
 				self.__removeInstruct(values[1].id)
 				self.__removeInstruct(values[0].id)
-				#TODO: remove from co_varnames
 
 			return False # Map and Optimize again
 
-		if self.init_code is not None:
-			print("Const Opts:", self.constant_opts)
-
+		if self.code is not None:
 			modified = False
 			for instruct in self.constant_opts:
 				args_instructs = [i for i in self.__prior(instruct, 2)[:ArgumentsNeeded[instruct.optcode]] if i.optcode == 100]
-				args = [self.init_code.co_consts[i.arg] for i in args_instructs]
+				args = [self.code.co_consts[i.arg] for i in args_instructs]
 				optcode = instruct.optcode
 				value = None
-
-				#TODO: Add INPLACE modification of consts instead of using the return then let the dead vars find the one if it died
+				value_set = False
 
 				if optcode == 10: # UNARY_POSITIVE
 					value = +args[0]
+					value_set = True
 
 				elif optcode == 11: # UNARY_NEGATIVE
 					value = -args[0]
+					value_set = True
 
 				elif optcode == 19: # BINARY_POWER
 					value = args[1] ** args[0]
+					value_set = True
 
 				elif optcode == 20: # BINARY MULTIPLY
 					value = args[1] * args[0]
+					value_set = True
 
 				elif optcode == 22: # BINARY_MODULO
 					value = args[1] % args[0]
+					value_set = True
 
 				elif optcode == 23: # BINARY_ADD
 					value = args[1] + args[0]
+					value_set = True
 
 				elif optcode == 24: # BINARY_SUBTRACT
 					value = args[1] - args[0]
+					value_set = True
 
 				elif optcode == 25: # BINARY_SUBSCR
 					value = args[1][args[0]]
+					value_set = True
 
 				elif optcode == 26: # BINARY_FLOOR_DIVIDE
 					value = args[1] // args[0]
+					value_set = True
 
 				elif optcode == 27: # BINARY_TRUE_DIVIDE
 					value = args[1] / args[0]
+					value_set = True
 
 				elif optcode == 28: # INPLACE_FLOOR_DIVIDE
 					args[1] //= args[0]
@@ -232,9 +204,11 @@ class Function:
 
 				elif optcode == 62: # BINARY_LSHIFT
 					value = args[1] << args[0]
+					value_set = True
 
 				elif optcode == 63: # BINARY_RSHIFT
 					value = args[1] >> args[0]
+					value_set = True
 
 				elif optcode == 67: # INPLACE_POWER
 					args[1] **= args[0]
@@ -249,16 +223,13 @@ class Function:
 					continue
 
 				modified = True
+				consts = list(self.code.co_consts)
 
-				#TODO: Modify constants, add value and only update args[1]'s value as args[0] is unchanging
-
-				consts = list(self.init_code.co_consts)
-				consts[args_instructs[1].arg] = args[1]
-
-				for _ in range(ArgumentsNeeded[optcode]):
+				for i in range(ArgumentsNeeded[optcode]):
+					consts[args_instructs[i].arg] = args[i]
 					self.__removeInstruct(instruct.id - 1)
 
-				if value is not None:
+				if value_set:
 					if value not in consts:
 						consts.append(value)
 						index = len(consts) - 1
@@ -269,38 +240,107 @@ class Function:
 
 				print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with a {opname[100]} of {index}")
 
-				self.init_code = CodeType(
-					self.init_code.co_argcount,
-					self.init_code.co_posonlyargcount,
-					self.init_code.co_kwonlyargcount,
-					self.init_code.co_nlocals,
-					self.init_code.co_stacksize,
-					self.init_code.co_flags,
-					#self.init_code.co_code,
+				self.code = CodeType(
+					self.code.co_argcount,
+					self.code.co_posonlyargcount,
+					self.code.co_kwonlyargcount,
+					self.code.co_nlocals,
+					self.code.co_stacksize,
+					self.code.co_flags,
 					self.__instructs_to_bytes(),
-					#self.init_code.co_consts,
 					tuple(consts),
-					self.init_code.co_names,
-					self.init_code.co_varnames,
-					self.init_code.co_filename,
-					self.init_code.co_name,
-					self.init_code.co_firstlineno,
-					self.init_code.co_lnotab,
-					self.init_code.co_freevars,
-					self.init_code.co_cellvars
+					self.code.co_names,
+					self.code.co_varnames,
+					self.code.co_filename,
+					self.code.co_name,
+					self.code.co_firstlineno,
+					self.code.co_lnotab,
+					self.code.co_freevars,
+					self.code.co_cellvars
 				)
 
 			if modified:
 				return False # Map and Optimize again
 
-		print("Returns:", self.returns)
+			del modified
+
 		for ret in self.returns:
 			prior: list = self.__prior(ret)
 			assigns: list = self.__assignments(ret.arg, prior)
 
 			#TODO: Clean up variable use in returns
 
-		return True # Terminate
+		modified = False
+
+		if self.code is not None:
+			new_vars = list(self.code.co_varnames)
+			for var in sorted(self.dead_vars, reverse=True):
+				print(f"Local variable #{var} is unused and thus dead so it will be removed")
+
+				for instruct in self.instructs:
+					if instruct is None: continue
+					if instruct.arg > var and instruct.optcode in (124, 125):
+						instruct.arg -= 1
+
+				del new_vars[var]
+
+			if len(new_vars) != len(self.code.co_varnames):
+				self.code = CodeType(
+					self.code.co_argcount,
+					self.code.co_posonlyargcount,
+					self.code.co_kwonlyargcount,
+					len(new_vars),
+					self.code.co_stacksize,
+					self.code.co_flags,
+					self.code.co_code,
+					self.code.co_consts,
+					self.code.co_names,
+					tuple(new_vars),
+					self.code.co_filename,
+					self.code.co_name,
+					self.code.co_firstlineno,
+					self.code.co_lnotab,
+					self.code.co_freevars,
+					self.code.co_cellvars
+				)
+
+				modified = True
+
+		if self.code is not None:
+			new_consts = list(self.code.co_consts)
+			for var in sorted(self.dead_consts, reverse=True):
+				print(f"Constant variable #{var} (Value={new_consts[var]}) is unused and thus dead so it will be removed")
+
+				for instruct in self.instructs:
+					if instruct is None: continue
+					if instruct.optcode == 100 and instruct.arg > var:
+						instruct.arg -= 1
+
+				del new_consts[var]
+
+			if len(new_consts) != len(self.code.co_consts):
+				self.code = CodeType(
+					self.code.co_argcount,
+					self.code.co_posonlyargcount,
+					self.code.co_kwonlyargcount,
+					self.code.co_nlocals,
+					self.code.co_stacksize,
+					self.code.co_flags,
+					self.code.co_code,
+					tuple(new_consts),
+					self.code.co_names,
+					self.code.co_varnames,
+					self.code.co_filename,
+					self.code.co_name,
+					self.code.co_firstlineno,
+					self.code.co_lnotab,
+					self.code.co_freevars,
+					self.code.co_cellvars
+				)
+
+				modified = True
+
+		return not modified
 
 	def __instructs_to_bytes(self, instructs: list = None):
 		if instructs is None: instructs = self.instructs
@@ -392,35 +432,97 @@ class Function:
 			output += f"{instruct.id:<3} {instruct.optcode:>3} {instruct.arg:<3}\n"
 		return output.rstrip("\n")
 
-initialFunction = """
-def test():
+def speeds(compiled: CodeType, runs: int = 512):
+	speeds = []
+
+	with open(devnull, "w") as null:
+		stdout = sys.stdout
+		sys.stdout = null
+
+		for _ in range(runs):
+			start = time()
+			exec(compiled)
+			end = time()
+			speeds.append(end - start)
+
+		sys.stdout = stdout
+
+	return (max(speeds), min(speeds), sum(speeds) / runs)
+
+def main():
+	initial_function = """def test():
 	testA = 29
 	testB = 18
 	testC = testA * testB
 	return testC
-"""
 
-initialCompile = compile(initialFunction, "<string>", "exec")
+print(test())"""
 
-initialCompiled = initialCompile.co_consts[0]
+	print("Code:")
+	print(initial_function)
 
-#print("Code:")
-#show_code(initialCompiled)
+	initial_compile = compile(initial_function, "<string>", "exec")
 
-#print("\nInstructions:")
-#dis(initialCompiled)
+	print("\nInitial Compiled Code:")
+	dis(initial_compile)
+	print()
 
-codes: bytes = initialCompiled.co_code
-#print(codes)
+	initial_speeds = speeds(initial_compile)
 
-instructs: list = [Instruct(codes[i], codes[i + 1]) for i in range(0, len(codes), 2)]
-Instruct.Reset()
+	initial_compiled = initial_compile.co_consts[0]
+	codes: bytes = initial_compiled.co_code
+	instructs: list = [Instruct(codes[i], codes[i + 1]) for i in range(0, len(codes), 2)]
+	Instruct.Reset()
 
-func: Function = Function(instructs, initialCompiled)
+	func: Function = Function(instructs, initial_compiled)
 
-print(func)
+	co_consts = list(initial_compile.co_consts)
+	co_consts[0] = CodeType(
+		func.code.co_argcount,
+		func.code.co_posonlyargcount,
+		func.code.co_kwonlyargcount,
+		func.code.co_nlocals,
+		func.code.co_stacksize,
+		func.code.co_flags,
+		func._Function__instructs_to_bytes(),
+		func.code.co_consts,
+		func.code.co_names,
+		func.code.co_varnames,
+		func.code.co_filename,
+		func.code.co_name,
+		func.code.co_firstlineno,
+		func.code.co_lnotab,
+		func.code.co_freevars,
+		func.code.co_cellvars
+	)
 
-finalFunc = """
-def test():
-	return 522
-"""
+	initial_compile = CodeType(
+		initial_compile.co_argcount,
+		initial_compile.co_posonlyargcount,
+		initial_compile.co_kwonlyargcount,
+		initial_compile.co_nlocals,
+		initial_compile.co_stacksize,
+		initial_compile.co_flags,
+		initial_compile.co_code,
+		tuple(co_consts),
+		initial_compile.co_names,
+		initial_compile.co_varnames,
+		initial_compile.co_filename,
+		initial_compile.co_name,
+		initial_compile.co_firstlineno,
+		initial_compile.co_lnotab,
+		initial_compile.co_freevars,
+		initial_compile.co_cellvars
+	)
+
+	print("\nFinal Compiled Code:")
+	dis(initial_compile)
+
+	final_speeds = speeds(initial_compile)
+
+	print(f"\n\n\nInitial Speeds:\n\tMin:     {initial_speeds[1] * 1000:0.5f}ms\n\tMax:     {initial_speeds[0] * 1000:0.5f}ms\n\tAverage: {initial_speeds[2] * 10 ** 6:0.5f}μs")
+	print(f"Finals Speeds:\n\tMin:     {final_speeds[1] * 1000:0.5f}ms\n\tMax:     {final_speeds[0] * 1000:0.5f}ms\n\tAverage: {final_speeds[2] * 10 ** 6:0.5f}μs")
+	print(f"Differences:\n\tMin:     {abs(final_speeds[1] - initial_speeds[1]) * 1000:0.5f}ms\n\tMax:     {abs(final_speeds[0] - initial_speeds[0]) * 1000:0.5f}ms\n\tAverage: {abs(final_speeds[2] - initial_speeds[2]) * 10 ** 9:0.5f}ns")
+
+if __name__ == "__main__":
+	main()
