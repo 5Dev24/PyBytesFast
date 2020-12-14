@@ -1,7 +1,9 @@
 from dis import *
+from opcode import opname
 from types import CodeType
 from time import time
 from os import devnull
+from quantiphy import Quantity
 import sys
 
 ArgumentsNeeded = {
@@ -63,6 +65,8 @@ class Function:
 		self.instructs = instructs
 		self.code = init_code
 		self.returns = self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
+
+	def optimize(self):
 		self.__cycle()
 
 	def __cycle(self):
@@ -303,7 +307,7 @@ class Function:
 		if self.code is not None:
 			new_consts = list(self.code.co_consts)
 			for var in sorted(self.dead_consts, reverse=True):
-				print(f"Constant variable #{var} (Value={new_consts[var]}) is unused and thus dead so it will be removed")
+				print(f"Constant variable #{var} (Value of {new_consts[var]}) is unused and thus dead so it will be removed")
 
 				for instruct in self.instructs:
 					if instruct is None:
@@ -478,6 +482,36 @@ def speeds(compiled: CodeType, runs: int = 512):
 
 	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close, speeds_average, speeds_average_close)
 
+def simple_dis(obj, headers = None):
+	if hasattr(obj, "co_consts"):
+		consts = obj.co_consts
+		if headers is None:
+			next_headers = [obj.co_name]
+		else:
+			next_headers = headers + [obj.co_name]
+
+		disassemblable = []
+		for i in range(len(consts)):
+			const = consts[i]
+			if hasattr(const, "co_code"):
+				disassemblable.append(i)
+				print(f"{i:>02} -> [CODE] {const.co_name}")
+			else:
+				print(f"{i:>02} -> [{type(const).__name__}] {const}")
+
+		for i in disassemblable:
+			simple_dis(const, next_headers)
+
+	if hasattr(obj, "co_code"):
+		if type(headers) is not list:
+			print("Disassemble of:", obj.co_name)
+		else:
+			print("Disassemble of:", " -> ".join(headers), "->", obj.co_name)
+		codes = obj.co_code
+		for i in range(0, len(codes), 2):
+			print(f"\t{opname[codes[i]]:<16} {codes[i + 1]}")
+		print()
+
 def main():
 	initial_function = \
 """def test():
@@ -488,14 +522,15 @@ def main():
 
 print(test())"""
 
+	quant = lambda x: Quantity(x, "s").render(prec = 5, strip_zeros=False)
+
 	print("Code:")
 	print(initial_function)
 
 	initial_compile = compile(initial_function, "<string>", "exec")
 
 	print("\nInitial Compiled Code:")
-	dis(initial_compile)
-	print()
+	simple_dis(initial_compile)
 
 	runs = 2048
 
@@ -511,6 +546,13 @@ print(test())"""
 
 	func: Function = Function(instructs, initial_compiled)
 	del instructs
+
+	optimize_start = time()
+	func.optimize()
+	optimize_end = time()
+	optimize_delta = optimize_end - optimize_start
+
+	print("\nOptimization Time:", quant(optimize_delta))
 
 	co_consts[0] = CodeType(
 		func.code.co_argcount,
@@ -554,13 +596,21 @@ print(test())"""
 	del initial_compile, co_consts
 
 	print("\nFinal Compiled Code:")
-	dis(final_compile)
+	simple_dis(final_compile)
 
 	final_speeds = speeds(final_compile, runs)
 
-	print(f"\n\n\nInitial Speeds:\n\tMin:     ({initial_speeds[1]:04d}) {initial_speeds[0] * 1e3:0.5f}ms\n\tMax:     ({initial_speeds[3]:04d}) {initial_speeds[2] * 1e3:0.5f}ms\n\tAverage: ({initial_speeds[5]:04d}) {initial_speeds[4] * 1e3:0.5f}ms")
-	print(f"Finals Speeds:\n\tMin:     ({final_speeds[1]:04d}) {final_speeds[0] * 1e3:0.5f}ms\n\tMax:     ({final_speeds[3]:04d}) {final_speeds[2] * 1e3:0.5f}ms\n\tAverage: ({final_speeds[5]:04d}) {final_speeds[4] * 1e3:0.5f}ms")
-	print(f"Differences:\n\tMin:     {abs(final_speeds[0] - initial_speeds[0]) * 1e6:0.5f}μs\n\tMax:     {abs(final_speeds[2] - initial_speeds[2]) * 1e6:0.5f}μs\n\tAverage: {abs(final_speeds[4] - initial_speeds[4]) * 1e6:0.5f}μs")
+	print(f"Initial Speeds:\n\tMin:     ({initial_speeds[1]:04d}) {quant(initial_speeds[0])}\n\
+\tMax:     ({initial_speeds[3]:04d}) {quant(initial_speeds[2])}\n\
+\tAverage: ({initial_speeds[5]:04d}) {quant(initial_speeds[4])}")
+
+	print(f"Finals Speeds:\n\tMin:     ({final_speeds[1]:04d}) {quant(final_speeds[0])}\n\
+\tMax:     ({final_speeds[3]:04d}) {quant(final_speeds[2])}\n\
+\tAverage: ({final_speeds[5]:04d}) {quant(final_speeds[4])}")
+
+	print("Differences:\n\tMin:     ", f"{quant(abs(final_speeds[0] - initial_speeds[0]))}\n\
+\tMax:     ", f"{quant(abs(final_speeds[2] - initial_speeds[2]))}\n\
+\tAverage: ", f"{quant(abs(final_speeds[4] - initial_speeds[4]))}", sep=" " * 7)
 
 if __name__ == "__main__":
 	main()
