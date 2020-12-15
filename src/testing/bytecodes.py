@@ -6,13 +6,45 @@ from os import devnull
 from quantiphy import Quantity
 import sys
 
+ValuesOnTheStack = {
+	  1: 1,        2: 2,      3: 1,        4: 1,
+	  5: 2,        6: 4,      9: 0,       10: 1,
+	 11: 1,       12: 1,     15: 1,       16: 2,
+	 17: 2,       19: 2,     20: 2,       22: 2,
+	 23: 2,       24: 2,     25: 2,       26: 2,
+	 27: 2,       28: 2,     29: 2,       48: 3,
+	 49: 3,       50: 1,     51: 1,       52: 1,
+	 54: (2, 3),  55: 2,     56: 2,       57: 2,
+	 59: 2,       60: 3,     61: 2,       63: 2,
+	 64: 2,       65: 2,     66: 2,       67: 2,
+	 68: 1,       69: 1,     70: 1,       71: 0,
+	 72: 2,       73: 1,     74: 0,       75: 2,
+	 76: 2,       77: 2,     78: 2,       79: 2,
+	 82: 1,       83: 1,     84: 1,       85: 0,
+	 86: 1,       87: 0,     89: 3,       90: 1,
+	 91: 0,       92: 1,     93: 1,       94: 1,
+	 95: 2,       96: 1,     97: 1,       98: 0,
+	100: 0,      101: 0,    102: None,   103: None,
+	104: None,   105: None, 106: 1,      107: 2,
+	108: 2,      109: 1,    110: 0,      111: 1,
+	112: 1,      113: 0,    114: 1,      115: 1,
+	116: 0,      117: 2,    118: 2,      121: 2,
+	122: 0,      124: 0,    125: 1,      126: 0,
+	130: (0, 1), 131: None, 132: (2, 3), 133: (2, 3),
+	135: 0,      136: 0,    137: "Stopped Here"
+}
+
 ArgumentsNeeded = {
-	10: 1, 11: 1, 15: 1, 19: 2,
-	20: 2, 22: 2, 23: 2, 24: 2,
-	25: 2, 26: 2, 27: 2, 28: 2,
-	29: 2, 55: 2, 56: 2, 57: 2,
-	59: 2, 62: 2, 63: 2, 67: 2,
-	75: 2, 76: 2
+	 90: 1,       91: 1,       92: 1,  93: 1,
+	 94: 1,       95: 1,       96: 1,  97: 1,
+	 98: 1,      100: 1,      101: 1, 102: 1,
+	103: 1,      104: 1,      105: 1, 106: 1,
+	107: 1,      108: 1,      109: 1, 110: 1,
+	111: (0, 1), 112: (0, 1), 113: 1, 114: (0, 1),
+	115: (0, 1), 116: 1,      117: 1, 118: 1,
+	121: 1,      122: 1,      124: 1, 125: 1,
+	126: 1,      130: 1,      131: 1, 132: 1,
+	133: 1,      135: 1,      136: 1, 137: "Stopped Here"
 }
 
 """
@@ -490,23 +522,35 @@ def simple_dis(obj, headers = None):
 		else:
 			next_headers = headers + [obj.co_name]
 
+		longest = max(consts, key = lambda const: 11 if hasattr(const, "co_code") else len(type(const).__name__))
+
+		if hasattr(longest, "co_code"):
+			longest = 11
+		else:
+			longest = len(type(longest).__name__)
+
 		disassemblable = []
+		consts_strings = []
 		for i in range(len(consts)):
 			const = consts[i]
 			if hasattr(const, "co_code"):
 				disassemblable.append(i)
-				print(f"{i:>02} -> [CODE] {const.co_name}")
+				consts_strings.append(f"{i:>02} -> [{'Code Object':<{longest}}] {const.co_name}")
 			else:
-				print(f"{i:>02} -> [{type(const).__name__}] {const}")
+				consts_strings.append(f"{i:>02} -> [{type(const).__name__:<{longest}}] {const}")
 
 		for i in disassemblable:
-			simple_dis(const, next_headers)
+			simple_dis(consts[i], next_headers)
 
 	if hasattr(obj, "co_code"):
 		if type(headers) is not list:
 			print("Disassemble of:", obj.co_name)
 		else:
 			print("Disassemble of:", " -> ".join(headers), "->", obj.co_name)
+
+		if consts_strings:
+			print("\n".join(consts_strings))
+
 		codes = obj.co_code
 		for i in range(0, len(codes), 2):
 			print(f"\t{opname[codes[i]]:<16} {codes[i + 1]}")
