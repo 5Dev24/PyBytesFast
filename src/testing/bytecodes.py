@@ -7,31 +7,36 @@ from quantiphy import Quantity
 import sys
 
 ValuesOnTheStack = {
-	  1: 1,        2: 2,      3: 1,        4: 1,
-	  5: 2,        6: 4,      9: 0,       10: 1,
-	 11: 1,       12: 1,     15: 1,       16: 2,
-	 17: 2,       19: 2,     20: 2,       22: 2,
-	 23: 2,       24: 2,     25: 2,       26: 2,
-	 27: 2,       28: 2,     29: 2,       48: 3,
-	 49: 3,       50: 1,     51: 1,       52: 1,
-	 54: (2, 3),  55: 2,     56: 2,       57: 2,
-	 59: 2,       60: 3,     61: 2,       63: 2,
-	 64: 2,       65: 2,     66: 2,       67: 2,
-	 68: 1,       69: 1,     70: 1,       71: 0,
-	 72: 2,       73: 1,     74: 0,       75: 2,
-	 76: 2,       77: 2,     78: 2,       79: 2,
-	 82: 1,       83: 1,     84: 1,       85: 0,
-	 86: 1,       87: 0,     89: 3,       90: 1,
-	 91: 0,       92: 1,     93: 1,       94: 1,
-	 95: 2,       96: 1,     97: 1,       98: 0,
-	100: 0,      101: 0,    102: None,   103: None,
-	104: None,   105: None, 106: 1,      107: 2,
-	108: 2,      109: 1,    110: 0,      111: 1,
-	112: 1,      113: 0,    114: 1,      115: 1,
-	116: 0,      117: 2,    118: 2,      121: 2,
-	122: 0,      124: 0,    125: 1,      126: 0,
-	130: (0, 1), 131: None, 132: (2, 3), 133: (2, 3),
-	135: 0,      136: 0,    137: "Stopped Here"
+	  1: 1,        2: 2,        3: 1,           4: 1,
+	  5: 2,        6: 4,        9: 0,          10: 1,
+	 11: 1,       12: 1,       15: 1,          16: 2,
+	 17: 2,       19: 2,       20: 2,          22: 2,
+	 23: 2,       24: 2,       25: 2,          26: 2,
+	 27: 2,       28: 2,       29: 2,          48: 3,
+	 49: 3,       50: 1,       51: 1,          52: 1,
+	 54: (2, 3),  55: 2,       56: 2,          57: 2,
+	 59: 2,       60: 3,       61: 2,          63: 2,
+	 64: 2,       65: 2,       66: 2,          67: 2,
+	 68: 1,       69: 1,       70: 1,          71: 0,
+	 72: 2,       73: 1,       74: 0,          75: 2,
+	 76: 2,       77: 2,       78: 2,          79: 2,
+	 82: 1,       83: 1,       84: 1,          85: 0,
+	 86: 1,       87: 0,       89: 3,          90: 1,
+	 91: 0,       92: 1,       93: 1,          94: 1,
+	 95: 2,       96: 1,       97: 1,          98: 0,
+	100: 0,      101: 0,      102: None,      103: None,
+	104: None,   105: None,   106: 1,         107: 2,
+	108: 2,      109: 1,      110: 0,         111: 1,
+	112: 1,      113: 0,      114: 1,         115: 1,
+	116: 0,      117: 2,      118: 2,         121: 2,
+	122: 0,      124: 0,      125: 1,         126: 0,
+	130: (0, 1), 131: None,   132: (2, 3),    133: (2, 3),
+	135: 0,      136: 0,      137: 1,         138: 0,
+	141: 1,      142: (2, 3), 143: 1,         144: 0,
+	145: 1,      146: 1,      147: 2,         148: 0,
+	154: 1,      155: (1, 2), 156: (1, None), 157: None,
+	160: 1,      161: None,   162: 2,         163: 2,
+	164: 2,      165: 2
 }
 
 ArgumentsNeeded = {
@@ -44,28 +49,31 @@ ArgumentsNeeded = {
 	115: (0, 1), 116: 1,      117: 1, 118: 1,
 	121: 1,      122: 1,      124: 1, 125: 1,
 	126: 1,      130: 1,      131: 1, 132: 1,
-	133: 1,      135: 1,      136: 1, 137: "Stopped Here"
+	133: 1,      135: 1,      136: 1, 137: 1,
+	138: 1,      141: 1,      142: 1, 143: 1,
+	144: 1,      145: 1,      146: 1, 147: 1,
+	148: 1,      154: 1,      155: 1, 156: 1,
+	157: 1,      160: 1,      161: 1, 162: 1,
+	163: 1,      164: 1,      165: 1
 }
 
 """
-CodeType(
-	code.co_argcount,
-	code.co_posonlyargcount,
-	code.co_kwonlyargcount,
-	code.co_nlocals,
-	code.co_stacksize,
-	code.co_flags,
-	code.co_code,
-	code.co_consts,
-	code.co_names,
-	code.co_varnames,
-	code.co_filename,
-	code.co_name,
-	code.co_firstlineno,
-	code.co_lnotab,
-	code.co_freevars,
-	code.co_cellvars
-)
+co_argcount        - # of positional arguments (includes ones with default values)
+co_posonlyargcount - # of positional only arguments
+co_kwonlyargcount  - # of keyword only arguments
+co_nlocals         - # of local variables (includes arguments), (nlocals - argcount = "true" nlocals)
+co_stacksize       - Size of stack (int)
+co_flags           - Interpreter flags (see dis.COMPILER_FLAG_NAMES)
+co_code            - Bytecode
+co_consts          - Tuple of constants (only values, None is in index 0 by default)
+co_names           - Tuple of names used in bytecode
+co_varnames        - Tuple of names of local variables (begins with argument names)
+co_filename        - Filename where the code is located (str)
+co_name            - Function name (str)
+co_firstlineno     - Code starting line, the line the first instruction appears on in the file (int)
+co_lnotab          - Bytecode offsets to line numbers (str)
+co_freevars        - Tuple of the free variables
+co_cellvars        - Tuple of the cell variables (variables accessable in a parent function for nested functions)
 """
 
 class Instruct:
@@ -96,7 +104,7 @@ class Function:
 	def __init__(self, instructs: list, init_code: CodeType = None):
 		self.instructs = instructs
 		self.code = init_code
-		self.returns = self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
+		self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
 
 	def optimize(self):
 		self.__cycle()
@@ -107,16 +115,15 @@ class Function:
 			self.__map()
 			ret = self.__optimize()
 
+		self.code = self.code.replace(co_code = self.__instructs_to_bytes())
+
 	def __map(self):
-		returns = []
 		single_use_vars = []
 		constant_opts = []
 		dead_consts = []
 		dead_vars = []
 
 		for instruct in self.instructs:
-			if instruct.optcode == 83:
-				returns.append(instruct)
 
 			if (instruct.optcode >= 10 and instruct.optcode <= 11) or\
 				(instruct.optcode >= 19 and instruct.optcode <= 29) or\
@@ -137,12 +144,11 @@ class Function:
 				elif assigns == 1:
 					single_use_vars.append(loc)
 
-			for con in range(1, len(self.code.co_consts)):
+			for con in range(len(self.code.co_consts)):
 				uses = len(self.__uses_const(con))
 				if uses == 0:
 					dead_consts.append(con)
 
-		self.returns = tuple(returns)
 		self.single_use_vars = tuple(single_use_vars)
 		self.constant_opts = tuple(constant_opts)
 		self.dead_consts = tuple(dead_consts)
@@ -169,7 +175,7 @@ class Function:
 		if self.code is not None:
 			modified = False
 			for instruct in self.constant_opts:
-				args_instructs = [i for i in self.__prior(instruct, 2)[:ArgumentsNeeded[instruct.optcode]] if i.optcode == 100]
+				args_instructs = [i for i in self.__prior(instruct, 2)[:ValuesOnTheStack[instruct.optcode]] if i.optcode == 100]
 				args = [self.code.co_consts[i.arg] for i in args_instructs]
 				optcode = instruct.optcode
 				value = None
@@ -253,10 +259,9 @@ class Function:
 				else:
 					continue
 
-				modified = True
 				consts = list(self.code.co_consts)
 
-				for i in range(ArgumentsNeeded[optcode]):
+				for i in range(ValuesOnTheStack[optcode]):
 					consts[args_instructs[i].arg] = args[i]
 					self.__removeInstruct(instruct.id - 1)
 
@@ -271,33 +276,11 @@ class Function:
 
 				print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with a {opname[100]} of {index}")
 
-				self.code = CodeType(
-					self.code.co_argcount,
-					self.code.co_posonlyargcount,
-					self.code.co_kwonlyargcount,
-					self.code.co_nlocals,
-					self.code.co_stacksize,
-					self.code.co_flags,
-					self.__instructs_to_bytes(),
-					tuple(consts),
-					self.code.co_names,
-					self.code.co_varnames,
-					self.code.co_filename,
-					self.code.co_name,
-					self.code.co_firstlineno,
-					self.code.co_lnotab,
-					self.code.co_freevars,
-					self.code.co_cellvars
-				)
+				self.code = self.code.replace(co_consts = tuple(consts))
+				modified = True
 
 			if modified:
 				return False # Map and Optimize again
-
-		for ret in self.returns:
-			prior: list = self.__prior(ret)
-			assigns: list = self.__assignments(ret.arg, prior)
-
-			#TODO: Clean up variable use in returns
 
 		modified = False
 
@@ -315,25 +298,7 @@ class Function:
 				del new_vars[var]
 
 			if len(new_vars) != len(self.code.co_varnames):
-				self.code = CodeType(
-					self.code.co_argcount,
-					self.code.co_posonlyargcount,
-					self.code.co_kwonlyargcount,
-					len(new_vars),
-					self.code.co_stacksize,
-					self.code.co_flags,
-					self.code.co_code,
-					self.code.co_consts,
-					self.code.co_names,
-					tuple(new_vars),
-					self.code.co_filename,
-					self.code.co_name,
-					self.code.co_firstlineno,
-					self.code.co_lnotab,
-					self.code.co_freevars,
-					self.code.co_cellvars
-				)
-
+				self.code = self.code.replace(co_nlocals = len(new_vars), co_varnames = tuple(new_vars))
 				modified = True
 
 		if self.code is not None:
@@ -351,25 +316,7 @@ class Function:
 				del new_consts[var]
 
 			if len(new_consts) != len(self.code.co_consts):
-				self.code = CodeType(
-					self.code.co_argcount,
-					self.code.co_posonlyargcount,
-					self.code.co_kwonlyargcount,
-					self.code.co_nlocals,
-					self.code.co_stacksize,
-					self.code.co_flags,
-					self.code.co_code,
-					tuple(new_consts),
-					self.code.co_names,
-					self.code.co_varnames,
-					self.code.co_filename,
-					self.code.co_name,
-					self.code.co_firstlineno,
-					self.code.co_lnotab,
-					self.code.co_freevars,
-					self.code.co_cellvars
-				)
-
+				self.code = self.code.replace(co_consts = tuple(new_consts))
 				modified = True
 
 		return not modified
@@ -386,7 +333,7 @@ class Function:
 		return bytes(output)
 
 	def __are_args_const(self, operation: Instruct, instructs: list = None):
-		const_needed = ArgumentsNeeded[operation.optcode]
+		const_needed = ValuesOnTheStack[operation.optcode]
 		const_gotten = sum([1 for instruct in instructs[:const_needed] if instruct.optcode == 100])
 		return const_gotten >= const_needed
 
@@ -530,17 +477,30 @@ def simple_dis(obj, headers = None):
 			longest = len(type(longest).__name__)
 
 		disassemblable = []
-		consts_strings = []
-		for i in range(len(consts)):
-			const = consts[i]
-			if hasattr(const, "co_code"):
-				disassemblable.append(i)
-				consts_strings.append(f"{i:>02} -> [{'Code Object':<{longest}}] {const.co_name}")
-			else:
-				consts_strings.append(f"{i:>02} -> [{type(const).__name__:<{longest}}] {const}")
+		consts_strings = False
+		consts_length = len(consts)
 
-		for i in disassemblable:
-			simple_dis(consts[i], next_headers)
+		if consts_length:
+			consts_strings = ["Constants (co_consts)"]
+
+			for i in range(consts_length):
+				const = consts[i]
+				if hasattr(const, "co_code"):
+					disassemblable.append(i)
+					consts_strings.append(f"{i:>02} -> [{'Code Object':<{longest}}] {const.co_name}")
+				else:
+					consts_strings.append(f"{i:>02} -> [{type(const).__name__:<{longest}}] {const}")
+
+			for i in disassemblable:
+				simple_dis(consts[i], next_headers)
+
+	if hasattr(obj, "co_varnames"):
+		varnames = obj.co_varnames
+
+		vars_strings = []
+		vars_length = len(varnames)
+
+
 
 	if hasattr(obj, "co_code"):
 		if type(headers) is not list:
@@ -549,11 +509,18 @@ def simple_dis(obj, headers = None):
 			print("Disassemble of:", " -> ".join(headers), "->", obj.co_name)
 
 		if consts_strings:
-			print("\n".join(consts_strings))
+			print(*consts_strings, sep="\n")
+
+
 
 		codes = obj.co_code
 		for i in range(0, len(codes), 2):
-			print(f"\t{opname[codes[i]]:<16} {codes[i + 1]}")
+			instruction = codes[i]
+			print(f"\t{opname[codes[i]]:<16}", end="")
+			if instruction in ArgumentsNeeded:
+				print(f" {codes[i + 1]}", end="")
+			print()
+
 		print()
 
 def main():
@@ -571,17 +538,17 @@ print(test())"""
 	print("Code:")
 	print(initial_function)
 
-	initial_compile = compile(initial_function, "<string>", "exec")
+	the_compile = compile(initial_function, "<string>", "exec")
 
 	print("\nInitial Compiled Code:")
-	simple_dis(initial_compile)
+	simple_dis(the_compile)
 
 	runs = 2048
 
-	initial_speeds = speeds(initial_compile, runs)
-	co_consts = list(initial_compile.co_consts)
+	initial_speeds = speeds(the_compile, runs)
+	co_consts = list(the_compile.co_consts)
 
-	initial_compiled = initial_compile.co_consts[0]
+	initial_compiled = the_compile.co_consts[0]
 	codes: bytes = initial_compiled.co_code
 	instructs: list = [Instruct(codes[i], codes[i + 1]) for i in range(0, len(codes), 2)]
 	del codes
@@ -598,51 +565,16 @@ print(test())"""
 
 	print("\nOptimization Time:", quant(optimize_delta))
 
-	co_consts[0] = CodeType(
-		func.code.co_argcount,
-		func.code.co_posonlyargcount,
-		func.code.co_kwonlyargcount,
-		func.code.co_nlocals,
-		func.code.co_stacksize,
-		func.code.co_flags,
-		func._Function__instructs_to_bytes(),
-		func.code.co_consts,
-		func.code.co_names,
-		func.code.co_varnames,
-		func.code.co_filename,
-		func.code.co_name,
-		func.code.co_firstlineno,
-		func.code.co_lnotab,
-		func.code.co_freevars,
-		func.code.co_cellvars
-	)
-
+	co_consts[0] = func.code
 	del func
 
-	final_compile = CodeType(
-		initial_compile.co_argcount,
-		initial_compile.co_posonlyargcount,
-		initial_compile.co_kwonlyargcount,
-		initial_compile.co_nlocals,
-		initial_compile.co_stacksize,
-		initial_compile.co_flags,
-		initial_compile.co_code,
-		tuple(co_consts),
-		initial_compile.co_names,
-		initial_compile.co_varnames,
-		initial_compile.co_filename,
-		initial_compile.co_name,
-		initial_compile.co_firstlineno,
-		initial_compile.co_lnotab,
-		initial_compile.co_freevars,
-		initial_compile.co_cellvars
-	)
-	del initial_compile, co_consts
+	the_compile = the_compile.replace(co_consts = tuple(co_consts))
+	del co_consts
 
 	print("\nFinal Compiled Code:")
-	simple_dis(final_compile)
+	simple_dis(the_compile)
 
-	final_speeds = speeds(final_compile, runs)
+	final_speeds = speeds(the_compile, runs)
 
 	print(f"Initial Speeds:\n\tMin:     ({initial_speeds[1]:04d}) {quant(initial_speeds[0])}\n\
 \tMax:     ({initial_speeds[3]:04d}) {quant(initial_speeds[2])}\n\
