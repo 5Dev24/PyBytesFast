@@ -73,7 +73,7 @@ co_name            - Function name (str)
 co_firstlineno     - Code starting line, the line the first instruction appears on in the file (int)
 co_lnotab          - Bytecode offsets to line numbers (str)
 co_freevars        - Tuple of the free variables
-co_cellvars        - Tuple of the cell variables (variables accessable in a parent function for nested functions)
+co_cellvars        - Tuple of the cell variables
 """
 
 class Instruct:
@@ -469,7 +469,7 @@ def simple_dis(obj, headers = None):
 		else:
 			next_headers = headers + [obj.co_name]
 
-		longest = max(consts, key = lambda const: 11 if hasattr(const, "co_code") else len(type(const).__name__))
+		longest = max(consts, key = lambda const: 4 if hasattr(const, "co_code") else len(type(const).__name__))
 
 		if hasattr(longest, "co_code"):
 			longest = 11
@@ -487,7 +487,7 @@ def simple_dis(obj, headers = None):
 				const = consts[i]
 				if hasattr(const, "co_code"):
 					disassemblable.append(i)
-					consts_strings.append(f"{i:>02} -> [{'Code Object':<{longest}}] {const.co_name}")
+					consts_strings.append(f"{i:>02} -> [{'Code':<{longest}}] {const.co_name}")
 				else:
 					consts_strings.append(f"{i:>02} -> [{type(const).__name__:<{longest}}] {const}")
 
@@ -497,10 +497,23 @@ def simple_dis(obj, headers = None):
 	if hasattr(obj, "co_varnames"):
 		varnames = obj.co_varnames
 
-		vars_strings = []
-		vars_length = len(varnames)
+		vars_strings = False
+		if len(varnames):
+			vars_strings = ["Variables (co_varnames)", *varnames]
 
+	if hasattr(obj, "co_freevars"):
+		freevars = obj.co_freevars
 
+		freevars_strings = False
+		if len(freevars):
+			freevars_strings = ["Free Variables (co_freevars)", *freevars]
+
+	if hasattr(obj, "co_cellvars"):
+		cellvars = obj.co_cellvars
+
+		cellvars_strings = False
+		if len(cellvars):
+			cellvars_strings = ["Cell Variables (co_cellvars)", *cellvars]
 
 	if hasattr(obj, "co_code"):
 		if type(headers) is not list:
@@ -509,9 +522,13 @@ def simple_dis(obj, headers = None):
 			print("Disassemble of:", " -> ".join(headers), "->", obj.co_name)
 
 		if consts_strings:
-			print(*consts_strings, sep="\n")
+			print(*consts_strings, sep="\n", end="\n\n")
 
+		if vars_strings:
+			print(*vars_strings, sep="\n", end="\n\n")
 
+		if freevars_strings:
+			print(*freevars_strings, sep="\n", end="\n\n")
 
 		codes = obj.co_code
 		for i in range(0, len(codes), 2):
@@ -543,9 +560,8 @@ print(test())"""
 	print("\nInitial Compiled Code:")
 	simple_dis(the_compile)
 
-	runs = 2048
+	runs = 2 ** 14
 
-	initial_speeds = speeds(the_compile, runs)
 	co_consts = list(the_compile.co_consts)
 
 	initial_compiled = the_compile.co_consts[0]
@@ -567,6 +583,8 @@ print(test())"""
 
 	co_consts[0] = func.code
 	del func
+
+	initial_speeds = speeds(the_compile, runs)
 
 	the_compile = the_compile.replace(co_consts = tuple(co_consts))
 	del co_consts
