@@ -1,4 +1,4 @@
-from threading import Thread, current_thread
+from threading import Thread, current_thread, Event
 from _thread import RLock
 from time import sleep
 
@@ -27,31 +27,35 @@ class LockingObject(RLock):
 		print(f"{self.name} -> __exit__ ({a}, {b}, {c})")
 		self.release()
 
-def threadA(obj: LockingObject):
-	obj.acquire()
-	sleep(5)
-	obj.release()
-	sleep(5)
-	obj.acquire()
-	sleep(5)
-	obj.release()
+def thread(obj: LockingObject, iters: int = 2):
+	threadAInst._started.wait()
+	threadBInst._started.wait()
+	startEvent.wait()
 
-def threadB(obj: LockingObject):
-	obj.acquire()
-	sleep(5)
-	obj.release()
-	sleep(5)
-	obj.acquire()
-	sleep(5)
-	obj.release()
+	for i in range(iters):
+		obj.acquire()
+		sleep(5)
+		obj.release()
+		if i != iters - 1:
+			sleep(5)
+
+obj = LockingObject("Obj")
+iters = 3
+threadAInst = Thread(target = thread, args = (obj, iters))
+threadBInst = Thread(target = thread, args = (obj, iters))
+startEvent = Event()
+
+def main():
+	threadAInst.start()
+	threadBInst.start()
+
+	threadAInst._started.wait()
+	threadBInst._started.wait()
+
+	print("Thread A Ident:", threadAInst.ident)
+	print("Thread B Ident:", threadBInst.ident)
+
+	startEvent.set()
 
 if __name__ == "__main__":
-	obj = LockingObject("Obj")
-	threadAInst = Thread(target = threadA, args=(obj,))
-	threadBInst = Thread(target = threadB, args=(obj,))
-
-	threadAInst.start()
-	print("Thread A Ident:", threadAInst.ident)
-
-	threadBInst.start()
-	print("Thread B Ident:", threadBInst.ident)
+	main()
