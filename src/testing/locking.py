@@ -23,13 +23,11 @@ class LockingObject(RLock):
 		print(f"{self.name} -> __enter__")
 		self.acquire()
 
-	def __exit__(self, a, b, c):
-		print(f"{self.name} -> __exit__ ({a}, {b}, {c})")
+	def __exit__(self, except_type, except_inst, except_trace):
+		print(f"{self.name} -> __exit__ ({except_type}, {except_inst}, {except_trace})")
 		self.release()
 
-def thread(obj: LockingObject, iters: int = 2):
-	threadAInst._started.wait()
-	threadBInst._started.wait()
+def thread_with_manual(obj: LockingObject, iters: int = 2):
 	startEvent.wait()
 
 	for i in range(iters):
@@ -39,18 +37,28 @@ def thread(obj: LockingObject, iters: int = 2):
 		if i != iters - 1:
 			sleep(5)
 
+def thread_with_auto(obj: LockingObject, iters: int = 2):
+	startEvent.wait()
+
+	for i in range(iters):
+		with obj:
+			sleep(5)
+
+		if i != iters - 1:
+			sleep(5)
+
 obj = LockingObject("Obj")
 iters = 3
-threadAInst = Thread(target = thread, args = (obj, iters))
-threadBInst = Thread(target = thread, args = (obj, iters))
+
+thread_target = thread_with_auto
+
+threadAInst = Thread(target = thread_target, args = (obj, iters))
+threadBInst = Thread(target = thread_target, args = (obj, iters))
 startEvent = Event()
 
 def main():
 	threadAInst.start()
 	threadBInst.start()
-
-	threadAInst._started.wait()
-	threadBInst._started.wait()
 
 	print("Thread A Ident:", threadAInst.ident)
 	print("Thread B Ident:", threadBInst.ident)
