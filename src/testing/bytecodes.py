@@ -287,7 +287,7 @@ class Function:
 		if self.code is not None:
 			new_vars = list(self.code.co_varnames)
 			for var in sorted(self.dead_vars, reverse=True):
-				print(f"Local variable #{var} is unused and thus dead so it will be removed")
+				print(f"Local variable #{var} is unused so it will be removed")
 
 				for instruct in self.instructs:
 					if instruct is None:
@@ -304,7 +304,7 @@ class Function:
 		if self.code is not None:
 			new_consts = list(self.code.co_consts)
 			for var in sorted(self.dead_consts, reverse=True):
-				print(f"Constant variable #{var} (Value of {new_consts[var]}) is unused and thus dead so it will be removed")
+				print(f"Constant variable #{var} (Value of {new_consts[var]}) is unused so it will be removed")
 
 				for instruct in self.instructs:
 					if instruct is None:
@@ -423,7 +423,7 @@ class Function:
 			output += f"{instruct.id:<3} {instruct.optcode:>3} {instruct.arg:<3}\n"
 		return output.rstrip("\n")
 
-def speeds(compiled: CodeType, runs: int = 512):
+def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5):
 	speeds = []
 
 	with open(devnull, "w") as null:
@@ -447,19 +447,21 @@ def speeds(compiled: CodeType, runs: int = 512):
 
 	speeds_min = min(speeds)
 	speeds_max = max(speeds)
-	speeds_average = sum(speeds) / runs
 
-	speeds_min_close = speeds_max_close = speeds_average_close = 0
+	speeds_min_close = speeds_max_close = 0
+
+	speeds_max_5percent = speeds_max * (1 - tolerance / 100.0)
+	speeds_min_5percent = speeds_min * (1 + tolerance / 100.0)
+
+	print(f"Max: {speeds_max}, 5%: {speeds_max_5percent}\nMin: {speeds_min}, 5%: {speeds_min_5percent}")
 
 	for speed in speeds:
-		if abs(speeds_max - speed) < 75e-4:
+		if speed > speeds_max_5percent:
 			speeds_max_close += 1
-		elif abs(speeds_min - speed) < 75e-4:
+		elif speed < speeds_min_5percent:
 			speeds_min_close += 1
-		elif abs(speeds_average - speed) < 375e-9:
-			speeds_average_close += 1
 
-	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close, speeds_average, speeds_average_close)
+	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close)
 
 def simple_dis(obj, headers = None):
 	if hasattr(obj, "co_consts"):
@@ -469,12 +471,18 @@ def simple_dis(obj, headers = None):
 		else:
 			next_headers = headers + [obj.co_name]
 
-		longest = max(consts, key = lambda const: 4 if hasattr(const, "co_code") else len(type(const).__name__))
+		longest_type = max(consts, key = lambda const: 4 if hasattr(const, "co_code") else len(type(const).__name__))
+		longest_name = max(consts, key = lambda const: len(const.co_name) if hasattr(const, "co_code") else len(str(const)))
 
-		if hasattr(longest, "co_code"):
-			longest = 11
+		if hasattr(longest_type, "co_code"):
+			longest_type = 4
 		else:
-			longest = len(type(longest).__name__)
+			longest_type = len(type(longest_type).__name__)
+
+		if hasattr(longest_name, "co_code"):
+			longest_name = len(longest_name.co_name)
+		else:
+			longest_name = len(str(longest_name))
 
 		disassemblable = []
 		consts_strings = False
@@ -487,9 +495,9 @@ def simple_dis(obj, headers = None):
 				const = consts[i]
 				if hasattr(const, "co_code"):
 					disassemblable.append(i)
-					consts_strings.append(f"{i:>02} -> [{'Code':<{longest}}] {const.co_name}")
+					consts_strings.append(f"{i:>02} -> {'Code':<{longest_type}} {const.co_name:>{longest_name}}")
 				else:
-					consts_strings.append(f"{i:>02} -> [{type(const).__name__:<{longest}}] {const}")
+					consts_strings.append(f"{i:>02} -> {type(const).__name__:<{longest_type}} {str(const):>{longest_name}}")
 
 			for i in disassemblable:
 				simple_dis(consts[i], next_headers)
@@ -533,9 +541,17 @@ def simple_dis(obj, headers = None):
 		codes = obj.co_code
 		for i in range(0, len(codes), 2):
 			instruction = codes[i]
-			print(f"\t{opname[codes[i]]:<16}", end="")
+			print(f"\t[{instruction:>3}] {opname[instruction]:<16}", end="")
 			if instruction in ArgumentsNeeded:
 				print(f" {codes[i + 1]}", end="")
+
+				if instruction == 100:
+					constLoadValue = obj.co_consts[codes[i + 1]]
+					if hasattr(constLoadValue, "co_code"):
+						constName = constLoadValue.co_name
+					else:
+						constName = str(obj.co_consts[codes[i + 1]])
+					print(f" [{constName:>{longest_name}}]", end="")
 			print()
 
 		print()
@@ -584,7 +600,7 @@ print(test())"""
 	co_consts[0] = func.code
 	del func
 
-	initial_speeds = speeds(the_compile, runs)
+	initial_speeds = speeds(the_compile, runs, 10)
 
 	the_compile = the_compile.replace(co_consts = tuple(co_consts))
 	del co_consts
@@ -592,19 +608,21 @@ print(test())"""
 	print("\nFinal Compiled Code:")
 	simple_dis(the_compile)
 
-	final_speeds = speeds(the_compile, runs)
+	final_speeds = speeds(the_compile, runs, 20)
 
-	print(f"Initial Speeds:\n\tMin:     ({initial_speeds[1]:04d}) {quant(initial_speeds[0])}\n\
-\tMax:     ({initial_speeds[3]:04d}) {quant(initial_speeds[2])}\n\
-\tAverage: ({initial_speeds[5]:04d}) {quant(initial_speeds[4])}")
+	initial_speeds_length = len(str(initial_speeds[1])) if initial_speeds[1] > initial_speeds[3] else len(str(initial_speeds[3]))
+	final_speeds_length = len(str(final_speeds[1])) if final_speeds[1] > final_speeds[3] else len(str(final_speeds[3]))
 
-	print(f"Finals Speeds:\n\tMin:     ({final_speeds[1]:04d}) {quant(final_speeds[0])}\n\
-\tMax:     ({final_speeds[3]:04d}) {quant(final_speeds[2])}\n\
-\tAverage: ({final_speeds[5]:04d}) {quant(final_speeds[4])}")
-
-	print("Differences:\n\tMin:     ", f"{quant(abs(final_speeds[0] - initial_speeds[0]))}\n\
-\tMax:     ", f"{quant(abs(final_speeds[2] - initial_speeds[2]))}\n\
-\tAverage: ", f"{quant(abs(final_speeds[4] - initial_speeds[4]))}", sep=" " * 7)
+	print(f"\
+Initial Speeds:\n\
+\tMin: ({initial_speeds[1]:>{initial_speeds_length}}) {quant(initial_speeds[0])}\n\
+\tMax: ({initial_speeds[3]:>{initial_speeds_length}}) {quant(initial_speeds[2])}\n\
+Finals Speeds:\n\
+\tMin: ({final_speeds[1]:>{final_speeds_length}}) {quant(final_speeds[0])}\n\
+\tMax: ({final_speeds[3]:>{final_speeds_length}}) {quant(final_speeds[2])}\n\
+Differences:\n\
+\tMin: {quant(abs(final_speeds[0] - initial_speeds[0]))}\n\
+\tMax: {quant(abs(final_speeds[2] - initial_speeds[2]))}")
 
 if __name__ == "__main__":
 	main()
