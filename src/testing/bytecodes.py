@@ -453,8 +453,6 @@ def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5):
 	speeds_max_5percent = speeds_max * (1 - tolerance / 100.0)
 	speeds_min_5percent = speeds_min * (1 + tolerance / 100.0)
 
-	print(f"Max: {speeds_max}, 5%: {speeds_max_5percent}\nMin: {speeds_min}, 5%: {speeds_min_5percent}")
-
 	for speed in speeds:
 		if speed > speeds_max_5percent:
 			speeds_max_close += 1
@@ -617,12 +615,15 @@ print(test())"""
 Initial Speeds:\n\
 \tMin: ({initial_speeds[1]:>{initial_speeds_length}}) {quant(initial_speeds[0])}\n\
 \tMax: ({initial_speeds[3]:>{initial_speeds_length}}) {quant(initial_speeds[2])}\n\
+\tAvg: {quant(initial_speeds[4])}\n\
 Finals Speeds:\n\
 \tMin: ({final_speeds[1]:>{final_speeds_length}}) {quant(final_speeds[0])}\n\
 \tMax: ({final_speeds[3]:>{final_speeds_length}}) {quant(final_speeds[2])}\n\
+\tAvg: {quant(final_speeds[4])}\n\
 Differences:\n\
 \tMin: {quant(abs(final_speeds[0] - initial_speeds[0]))}\n\
-\tMax: {quant(abs(final_speeds[2] - initial_speeds[2]))}")
+\tMax: {quant(abs(final_speeds[2] - initial_speeds[2]))}\n\
+\tAvg: {quant(abs(final_speeds[4] - initial_speeds[4]))}")
 
 if __name__ == "__main__":
 	main()
