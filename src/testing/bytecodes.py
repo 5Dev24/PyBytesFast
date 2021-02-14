@@ -101,10 +101,11 @@ class Instruct:
 
 class Function:
 
-	def __init__(self, instructs: list, init_code: CodeType = None):
+	def __init__(self, instructs: list, init_code: CodeType = None, debug: bool = False):
 		self.instructs = instructs
 		self.code = init_code
 		self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
+		self.__debug = debug
 
 	def optimize(self):
 		self.__cycle()
@@ -161,7 +162,8 @@ class Function:
 			if store.id > 0 and (load_struct := self.__find(store.id - 1, self.__prior(store))) is not None:
 				if load_struct.optcode == 100:
 					singles_to_remove[var] = [store, self.__uses(var)[0], load_struct]
-					print(f"The single use of {var} will be replaced with a LOAD_CONST of {load_struct.arg}")
+					if self.__debug:
+						print(f"The single use of {self.code.co_varnames[var]} [{var}] will be replaced with a LOAD_CONST of {load_struct.arg} [{self.code.co_consts[load_struct.arg]}]")
 
 		if len(singles_to_remove):
 
@@ -274,7 +276,13 @@ class Function:
 
 					self.__replaceInstruct(instruct.id, Instruct(100, index, give_id = False))
 
-				print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with a {opname[100]} of {index}")
+					if self.__debug:
+						print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with a {opname[100]} of {index} [{consts[index]}]")
+				else:
+					self.__removeInstruct(instruct.id)
+
+					if self.__debug:
+						print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with the constant {args[1]}")
 
 				self.code = self.code.replace(co_consts = tuple(consts))
 				modified = True
@@ -287,7 +295,8 @@ class Function:
 		if self.code is not None:
 			new_vars = list(self.code.co_varnames)
 			for var in sorted(self.dead_vars, reverse=True):
-				print(f"Local variable #{var} is unused so it will be removed")
+				if self.__debug:
+					print(f"Local variable {new_vars[var]} [{var}] is unused so it will be removed")
 
 				for instruct in self.instructs:
 					if instruct is None:
@@ -304,7 +313,8 @@ class Function:
 		if self.code is not None:
 			new_consts = list(self.code.co_consts)
 			for var in sorted(self.dead_consts, reverse=True):
-				print(f"Constant variable #{var} (Value of {new_consts[var]}) is unused so it will be removed")
+				if self.__debug:
+					print(f"Constant variable {new_consts[var]} [{var}] is unused so it will be removed")
 
 				for instruct in self.instructs:
 					if instruct is None:
@@ -423,8 +433,19 @@ class Function:
 			output += f"{instruct.id:<3} {instruct.optcode:>3} {instruct.arg:<3}\n"
 		return output.rstrip("\n")
 
-def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5):
+def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5, include_zeros: bool = False, refinements: int = 2):
+	def refine_data():
+		_avg = avg()
+		deviation = calc_standard_deviation()
+		return [speed for speed in speeds if abs(speed - _avg) < deviation]
+
+	def calc_standard_deviation():
+		_avg = avg()
+		sum_squared_deviations = sum(((speed - _avg) ** 2 for speed in speeds))
+		return (sum_squared_deviations / runs) ** 0.5
+
 	speeds = []
+	avg = lambda: sum(speeds) / runs
 
 	with open(devnull, "w") as null:
 		stdout = sys.stdout
@@ -437,7 +458,7 @@ def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5):
 			end = time()
 
 			delta = end - start
-			if not delta:
+			if not (include_zeros or delta):
 				continue
 
 			speeds.append(delta)
@@ -445,23 +466,32 @@ def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5):
 
 		sys.stdout = stdout
 
+	for i in range(refinements):
+		speeds = refine_data()
+
 	speeds_min = min(speeds)
 	speeds_max = max(speeds)
-
 	speeds_min_close = speeds_max_close = 0
 
-	speeds_max_5percent = speeds_max * (1 - tolerance / 100.0)
-	speeds_min_5percent = speeds_min * (1 + tolerance / 100.0)
+	speeds_range = speeds_max - speeds_min
+	speeds_max_percent = speeds_max - speeds_range * (tolerance / 100.0)
+	speeds_min_percent = speeds_min + speeds_range * (tolerance / 100.0)
 
 	for speed in speeds:
-		if speed > speeds_max_5percent:
-			speeds_max_close += 1
-		elif speed < speeds_min_5percent:
+		if speed < speeds_min_percent:
 			speeds_min_close += 1
+		elif speed > speeds_max_percent:
+			speeds_max_close += 1
 
-	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close)
+	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close, avg())
 
 def simple_dis(obj, headers = None):
+	consts_strings = False
+	vars_strings = False
+	freevars_strings = False
+	cellvars_strings = False
+	names_strings = False
+
 	if hasattr(obj, "co_consts"):
 		consts = obj.co_consts
 		if headers is None:
@@ -469,21 +499,24 @@ def simple_dis(obj, headers = None):
 		else:
 			next_headers = headers + [obj.co_name]
 
-		longest_type = max(consts, key = lambda const: 4 if hasattr(const, "co_code") else len(type(const).__name__))
-		longest_name = max(consts, key = lambda const: len(const.co_name) if hasattr(const, "co_code") else len(str(const)))
+		if len(consts):
+			longest_const_type = max(consts, key = lambda const: 4 if hasattr(const, "co_code") else len(type(const).__name__))
+			longest_const_name = max(consts, key = lambda const: len(const.co_name) if hasattr(const, "co_code") else len(str(const)))
 
-		if hasattr(longest_type, "co_code"):
-			longest_type = 4
-		else:
-			longest_type = len(type(longest_type).__name__)
+			if hasattr(longest_const_type, "co_code"):
+				longest_const_type = 4
+			else:
+				longest_const_type = len(type(longest_const_type).__name__)
 
-		if hasattr(longest_name, "co_code"):
-			longest_name = len(longest_name.co_name)
+			if hasattr(longest_const_name, "co_code"):
+				longest_const_name = len(longest_const_name.co_name)
+			else:
+				longest_const_name = len(str(longest_const_name))
 		else:
-			longest_name = len(str(longest_name))
+			longest_const_type = 0
+			longest_const_name = 0
 
 		disassemblable = []
-		consts_strings = False
 		consts_length = len(consts)
 
 		if consts_length:
@@ -493,9 +526,9 @@ def simple_dis(obj, headers = None):
 				const = consts[i]
 				if hasattr(const, "co_code"):
 					disassemblable.append(i)
-					consts_strings.append(f"{i:>02} -> {'Code':<{longest_type}} {const.co_name:>{longest_name}}")
+					consts_strings.append(f"{i:>02} -> {'Code':<{longest_const_type}} {const.co_name:>{longest_const_name}}")
 				else:
-					consts_strings.append(f"{i:>02} -> {type(const).__name__:<{longest_type}} {str(const):>{longest_name}}")
+					consts_strings.append(f"{i:>02} -> {type(const).__name__:<{longest_const_type}} {str(const):>{longest_const_name}}")
 
 			for i in disassemblable:
 				simple_dis(consts[i], next_headers)
@@ -503,23 +536,27 @@ def simple_dis(obj, headers = None):
 	if hasattr(obj, "co_varnames"):
 		varnames = obj.co_varnames
 
-		vars_strings = False
 		if len(varnames):
 			vars_strings = ["Variables (co_varnames)", *varnames]
 
 	if hasattr(obj, "co_freevars"):
 		freevars = obj.co_freevars
 
-		freevars_strings = False
 		if len(freevars):
 			freevars_strings = ["Free Variables (co_freevars)", *freevars]
 
 	if hasattr(obj, "co_cellvars"):
 		cellvars = obj.co_cellvars
 
-		cellvars_strings = False
 		if len(cellvars):
 			cellvars_strings = ["Cell Variables (co_cellvars)", *cellvars]
+
+	if hasattr(obj, "co_names"):
+		names = obj.co_names
+
+		if len(names):
+			longest_names_name = len(max(names, key = lambda name: len(name)))
+			names_strings = ["Names (co_names)", *names]
 
 	if hasattr(obj, "co_code"):
 		if type(headers) is not list:
@@ -536,6 +573,12 @@ def simple_dis(obj, headers = None):
 		if freevars_strings:
 			print(*freevars_strings, sep="\n", end="\n\n")
 
+		if cellvars_strings:
+			print(*cellvars_strings, sep="\n", end="\n\n")
+
+		if names_strings:
+			print(*names_strings, sep="\n", end="\n\n")
+
 		codes = obj.co_code
 		for i in range(0, len(codes), 2):
 			instruction = codes[i]
@@ -544,17 +587,30 @@ def simple_dis(obj, headers = None):
 				print(f" {codes[i + 1]}", end="")
 
 				if instruction == 100:
-					constLoadValue = obj.co_consts[codes[i + 1]]
-					if hasattr(constLoadValue, "co_code"):
-						constName = constLoadValue.co_name
+					const_load_value = obj.co_consts[codes[i + 1]]
+					if hasattr(const_load_value, "co_code"):
+						const_name = const_load_value.co_name
+						const_type = "Code"
 					else:
-						constName = str(obj.co_consts[codes[i + 1]])
-					print(f" [{constName:>{longest_name}}]", end="")
+						const_name = str(obj.co_consts[codes[i + 1]])
+						const_type = type(obj.co_consts[codes[i + 1]]).__name__
+					print(f" [{const_name:<{longest_const_name}} ({const_type:>{longest_const_type}})]", end="")
+				elif instruction == 90 or instruction == 101:
+					names_name = obj.co_names[codes[i + 1]]
+					print(f" [{names_name:<{longest_names_name}}]", end="")
 			print()
 
 		print()
 
 def main():
+	debug = False # Enabled debugging
+
+	# Speed calculation settings
+	tolerance = 5 # Percent with min/max to count
+	include_zeros = False # Allow data to include zeros, set to False when optimizing a short function
+	refinements = 1 # Number of times to clean outliers
+	runs = 2 ** 16 # Number of datapoints to collect
+
 	initial_function = \
 """def test():
 	testA = 29
@@ -564,17 +620,18 @@ def main():
 
 print(test())"""
 
-	quant = lambda x: Quantity(x, "s").render(prec = 5, strip_zeros=False)
+	quant = lambda x: Quantity(x, "s").render(prec = 5, strip_zeros = False)
 
-	print("Code:")
-	print(initial_function)
+	if debug:
+		print("Code:")
+		print(initial_function)
 
 	the_compile = compile(initial_function, "<string>", "exec")
+	del initial_function
 
-	print("\nInitial Compiled Code:")
-	simple_dis(the_compile)
-
-	runs = 2 ** 14
+	if debug:
+		print("\nInitial Compiled Code:")
+		simple_dis(the_compile)
 
 	co_consts = list(the_compile.co_consts)
 
@@ -585,7 +642,7 @@ print(test())"""
 
 	Instruct.Reset()
 
-	func: Function = Function(instructs, initial_compiled)
+	func: Function = Function(instructs, initial_compiled, debug)
 	del instructs
 
 	optimize_start = time()
@@ -593,37 +650,54 @@ print(test())"""
 	optimize_end = time()
 	optimize_delta = optimize_end - optimize_start
 
-	print("\nOptimization Time:", quant(optimize_delta))
+	if debug:
+		print("\nOptimization Time:", quant(optimize_delta))
+
+	del optimize_start, optimize_end, optimize_delta
 
 	co_consts[0] = func.code
 	del func
 
-	initial_speeds = speeds(the_compile, runs, 10)
+	initial_speeds = speeds(the_compile, runs, tolerance, include_zeros, refinements)
 
 	the_compile = the_compile.replace(co_consts = tuple(co_consts))
 	del co_consts
 
-	print("\nFinal Compiled Code:")
-	simple_dis(the_compile)
+	if debug:
+		print("\nFinal Compiled Code:")
+		simple_dis(the_compile)
 
-	final_speeds = speeds(the_compile, runs, 20)
+	final_speeds = speeds(the_compile, runs, tolerance, include_zeros, refinements)
+	del the_compile
 
 	initial_speeds_length = len(str(initial_speeds[1])) if initial_speeds[1] > initial_speeds[3] else len(str(initial_speeds[3]))
 	final_speeds_length = len(str(final_speeds[1])) if final_speeds[1] > final_speeds[3] else len(str(final_speeds[3]))
 
-	print(f"\
+	min_better = final_speeds[0] - initial_speeds[0] <= 0
+	max_better = final_speeds[2] - initial_speeds[2] <= 0
+	avg_better = final_speeds[4] - initial_speeds[4] <= 0
+
+	print(f"\n\
 Initial Speeds:\n\
-\tMin: ({initial_speeds[1]:>{initial_speeds_length}}) {quant(initial_speeds[0])}\n\
-\tMax: ({initial_speeds[3]:>{initial_speeds_length}}) {quant(initial_speeds[2])}\n\
+\tMin: {quant(initial_speeds[0])}, Within {tolerance}%: {initial_speeds[1]:>{initial_speeds_length}}\n\
+\tMax: {quant(initial_speeds[2])}, Within {tolerance}%: {initial_speeds[3]:>{initial_speeds_length}}\n\
 \tAvg: {quant(initial_speeds[4])}\n\
 Finals Speeds:\n\
-\tMin: ({final_speeds[1]:>{final_speeds_length}}) {quant(final_speeds[0])}\n\
-\tMax: ({final_speeds[3]:>{final_speeds_length}}) {quant(final_speeds[2])}\n\
+\tMin: {quant(final_speeds[0])}, Within {tolerance}%: {final_speeds[1]:>{final_speeds_length}}\n\
+\tMax: {quant(final_speeds[2])}, Within {tolerance}%: {final_speeds[3]:>{final_speeds_length}}\n\
 \tAvg: {quant(final_speeds[4])}\n\
-Differences:\n\
-\tMin: {quant(abs(final_speeds[0] - initial_speeds[0]))}\n\
-\tMax: {quant(abs(final_speeds[2] - initial_speeds[2]))}\n\
-\tAvg: {quant(abs(final_speeds[4] - initial_speeds[4]))}")
+Speed Deltas:\n\
+\tMin: {quant(abs(final_speeds[0] - initial_speeds[0]))} [{'Better' if min_better else 'Worse'}]\n\
+\tMax: {quant(abs(final_speeds[2] - initial_speeds[2]))} [{'Better' if max_better else 'Worse'}]\n\
+\tAvg: {quant(abs(final_speeds[4] - initial_speeds[4]))} [{'Better' if avg_better else 'Worse'}]")
+
+	print(f"\n\
+Optimizer ran with the following settings:\n\
+\tTolerance: {tolerance}\n\
+\tIncluding Zeros: {'Yes' if include_zeros else 'No'}\n\
+\tData Refinements {refinements}\n\
+\tRuns: {runs}\n\
+\tDebug: {'Yes' if debug else 'No'}")
 
 if __name__ == "__main__":
 	main()
