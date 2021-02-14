@@ -471,19 +471,24 @@ def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5, include_ze
 
 	speeds_min = min(speeds)
 	speeds_max = max(speeds)
-	speeds_min_close = speeds_max_close = 0
 
-	speeds_range = speeds_max - speeds_min
-	speeds_max_percent = speeds_max - speeds_range * (tolerance / 100.0)
-	speeds_min_percent = speeds_min + speeds_range * (tolerance / 100.0)
+	if tolerance <= 0:
+		return (speeds_min, speeds_max, avg())
 
-	for speed in speeds:
-		if speed < speeds_min_percent:
-			speeds_min_close += 1
-		elif speed > speeds_max_percent:
-			speeds_max_close += 1
+	else:
+		speeds_min_close = speeds_max_close = 0
 
-	return (speeds_min, speeds_min_close, speeds_max, speeds_max_close, avg())
+		speeds_range = speeds_max - speeds_min
+		speeds_max_percent = speeds_max - speeds_range * (tolerance / 100.0)
+		speeds_min_percent = speeds_min + speeds_range * (tolerance / 100.0)
+
+		for speed in speeds:
+			if speed < speeds_min_percent:
+				speeds_min_close += 1
+			elif speed > speeds_max_percent:
+				speeds_max_close += 1
+
+		return (speeds_min, speeds_max, avg(), speeds_min_close, speeds_max_close)
 
 def simple_dis(obj, headers = None):
 	consts_strings = False
@@ -606,10 +611,10 @@ def main():
 	debug = False # Enabled debugging
 
 	# Speed calculation settings
-	tolerance = 5 # Percent with min/max to count
-	include_zeros = False # Allow data to include zeros, set to False when optimizing a short function
+	tolerance = 0 # Percent with min/max to count
+	include_zeros = True # Allow data to include zeros, set to False when optimizing a short function
 	refinements = 1 # Number of times to clean outliers
-	runs = 2 ** 16 # Number of datapoints to collect
+	runs = 2 ** 22 # Number of datapoints to collect
 
 	initial_function = \
 """def test():
@@ -670,30 +675,41 @@ print(test())"""
 	final_speeds = speeds(the_compile, runs, tolerance, include_zeros, refinements)
 	del the_compile
 
-	initial_speeds_length = len(str(initial_speeds[1])) if initial_speeds[1] > initial_speeds[3] else len(str(initial_speeds[3]))
-	final_speeds_length = len(str(final_speeds[1])) if final_speeds[1] > final_speeds[3] else len(str(final_speeds[3]))
+	min_delta = final_speeds[0] - initial_speeds[0]
+	max_delta = final_speeds[1] - initial_speeds[1]
+	avg_delta = final_speeds[2] - initial_speeds[2]
 
-	min_better = final_speeds[0] - initial_speeds[0] <= 0
-	max_better = final_speeds[2] - initial_speeds[2] <= 0
-	avg_better = final_speeds[4] - initial_speeds[4] <= 0
+	if tolerance > 0:
+		initial_speeds_length = len(str(initial_speeds[3])) if initial_speeds[3] > initial_speeds[4] else len(str(initial_speeds[4]))
+		final_speeds_length = len(str(final_speeds[3])) if final_speeds[3] > final_speeds[4] else len(str(final_speeds[4]))
 
-	print(f"\n\
+		print(f"\n\
 Initial Speeds:\n\
-\tMin: {quant(initial_speeds[0])}, Within {tolerance}%: {initial_speeds[1]:>{initial_speeds_length}}\n\
-\tMax: {quant(initial_speeds[2])}, Within {tolerance}%: {initial_speeds[3]:>{initial_speeds_length}}\n\
-\tAvg: {quant(initial_speeds[4])}\n\
+\tMin: {quant(initial_speeds[0])}, Within {tolerance}%: {initial_speeds[3]:>{initial_speeds_length}}\n\
+\tMax: {quant(initial_speeds[1])}, Within {tolerance}%: {initial_speeds[4]:>{initial_speeds_length}}\n\
+\tAvg: {quant(initial_speeds[2])}\n\
 Finals Speeds:\n\
-\tMin: {quant(final_speeds[0])}, Within {tolerance}%: {final_speeds[1]:>{final_speeds_length}}\n\
-\tMax: {quant(final_speeds[2])}, Within {tolerance}%: {final_speeds[3]:>{final_speeds_length}}\n\
-\tAvg: {quant(final_speeds[4])}\n\
-Speed Deltas:\n\
-\tMin: {quant(abs(final_speeds[0] - initial_speeds[0]))} [{'Better' if min_better else 'Worse'}]\n\
-\tMax: {quant(abs(final_speeds[2] - initial_speeds[2]))} [{'Better' if max_better else 'Worse'}]\n\
-\tAvg: {quant(abs(final_speeds[4] - initial_speeds[4]))} [{'Better' if avg_better else 'Worse'}]")
+\tMin: {quant(final_speeds[0])}, Within {tolerance}%: {final_speeds[3]:>{final_speeds_length}}\n\
+\tMax: {quant(final_speeds[1])}, Within {tolerance}%: {final_speeds[4]:>{final_speeds_length}}\n\
+\tAvg: {quant(final_speeds[2])}")
+	else:
+		print(f"\n\
+Initial Speeds:\n\
+\tMin: {quant(initial_speeds[0])}\n\
+\tMax: {quant(initial_speeds[1])}\n\
+\tAvg: {quant(initial_speeds[2])}\n\
+Finals Speeds:\n\
+\tMin: {quant(final_speeds[0])}\n\
+\tMax: {quant(final_speeds[1])}\n\
+\tAvg: {quant(final_speeds[2])}")
 
-	print(f"\n\
+	print(f"\
+Speed Deltas:\n\
+\tMin: {quant(abs(min_delta))} [{'Better' if min_delta < 0 else ('Worse' if min_delta else 'Same')}]\n\
+\tMax: {quant(abs(max_delta))} [{'Better' if max_delta < 0 else ('Worse' if max_delta else 'Same')}]\n\
+\tAvg: {quant(abs(avg_delta))} [{'Better' if avg_delta < 0 else ('Worse' if avg_delta else 'Same')}]\n\
 Optimizer ran with the following settings:\n\
-\tTolerance: {tolerance}\n\
+\tTolerance: {tolerance if tolerance > 0 else 'Disabled'}\n\
 \tIncluding Zeros: {'Yes' if include_zeros else 'No'}\n\
 \tData Refinements {refinements}\n\
 \tRuns: {runs}\n\
