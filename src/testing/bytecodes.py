@@ -1,8 +1,8 @@
-from dis import *
 from opcode import opname
 from types import CodeType
-from time import time
+from time import process_time
 from os import devnull
+from typing import Tuple
 from quantiphy import Quantity
 import sys
 
@@ -375,6 +375,7 @@ class Function:
 				self.instructs[i] = replacement
 				break
 
+	""" Unused
 	def __insertInstruct(self, id: int, insert: Instruct):
 		for i in range(len(self.instructs)):
 			instruct = self.instructs[i]
@@ -385,6 +386,7 @@ class Function:
 				insert.id = id
 				instruct.id += 1
 				self.instructs.insert(i, insert)
+	"""
 
 	def __find(self, id: int, instructs: list = None):
 		if instructs is None: instructs = self.instructs
@@ -433,7 +435,7 @@ class Function:
 			output += f"{instruct.id:<3} {instruct.optcode:>3} {instruct.arg:<3}\n"
 		return output.rstrip("\n")
 
-def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5, include_zeros: bool = False, refinements: int = 2):
+def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5, refinements: int = 2) -> Tuple[float]:
 	def refine_data():
 		_avg = avg()
 		deviation = calc_standard_deviation()
@@ -453,15 +455,10 @@ def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5, include_ze
 
 		i = 0
 		while i < runs:
-			start = time()
+			start = process_time()
 			exec(compiled)
-			end = time()
-
-			delta = end - start
-			if not (include_zeros or delta):
-				continue
-
-			speeds.append(delta)
+			end = process_time()
+			speeds.append(end - start)
 			i += 1
 
 		sys.stdout = stdout
@@ -608,15 +605,14 @@ def simple_dis(obj, headers = None):
 		print()
 
 def main():
-	debug = False # Enabled debugging
+	debug: bool = False # Enabled debugging
 
 	# Speed calculation settings
-	tolerance = 0 # Percent with min/max to count
-	include_zeros = True # Allow data to include zeros, set to False when optimizing a short function
-	refinements = 1 # Number of times to clean outliers
-	runs = 2 ** 22 # Number of datapoints to collect
+	tolerance: float = 0   # Percent with min/max to count
+	refinements: int = 1 # Number of times to clean outliers
+	runs: int = 2 ** 22  # Number of datapoints to collect
 
-	initial_function = \
+	initial_function: str = \
 """def test():
 	testA = 29
 	testB = 18
@@ -625,13 +621,13 @@ def main():
 
 print(test())"""
 
-	quant = lambda x: Quantity(x, "s").render(prec = 5, strip_zeros = False)
+	quant = lambda x: Quantity(x, "s").render(prec = 4, strip_zeros = False)
 
 	if debug:
 		print("Code:")
 		print(initial_function)
 
-	the_compile = compile(initial_function, "<string>", "exec")
+	the_compile: CodeType = compile(initial_function, "<string>", "exec")
 	del initial_function
 
 	if debug:
@@ -650,9 +646,9 @@ print(test())"""
 	func: Function = Function(instructs, initial_compiled, debug)
 	del instructs
 
-	optimize_start = time()
+	optimize_start = process_time()
 	func.optimize()
-	optimize_end = time()
+	optimize_end = process_time()
 	optimize_delta = optimize_end - optimize_start
 
 	if debug:
@@ -663,7 +659,7 @@ print(test())"""
 	co_consts[0] = func.code
 	del func
 
-	initial_speeds = speeds(the_compile, runs, tolerance, include_zeros, refinements)
+	initial_speeds = speeds(the_compile, runs, tolerance, refinements)
 
 	the_compile = the_compile.replace(co_consts = tuple(co_consts))
 	del co_consts
@@ -672,7 +668,7 @@ print(test())"""
 		print("\nFinal Compiled Code:")
 		simple_dis(the_compile)
 
-	final_speeds = speeds(the_compile, runs, tolerance, include_zeros, refinements)
+	final_speeds = speeds(the_compile, runs, tolerance, refinements)
 	del the_compile
 
 	min_delta = final_speeds[0] - initial_speeds[0]
@@ -710,7 +706,6 @@ Speed Deltas:\n\
 \tAvg: {quant(abs(avg_delta))} [{'Better' if avg_delta < 0 else ('Worse' if avg_delta else 'Same')}]\n\
 Optimizer ran with the following settings:\n\
 \tTolerance: {tolerance if tolerance > 0 else 'Disabled'}\n\
-\tIncluding Zeros: {'Yes' if include_zeros else 'No'}\n\
 \tData Refinements {refinements}\n\
 \tRuns: {runs}\n\
 \tDebug: {'Yes' if debug else 'No'}")

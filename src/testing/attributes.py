@@ -4,8 +4,6 @@ Sources:
 	- https://stackoverflow.com/a/961057
 """
 
-import inspect
-
 class Attribute:
 
 	@classmethod
