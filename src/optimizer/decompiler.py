@@ -1,5 +1,6 @@
 from opcode import opname
 from types import CodeType
+from typing import List
 
 # Helper function
 # Checks if an optcode needs at least one argument
@@ -14,106 +15,26 @@ def _needs_arguments(optcode: int) -> bool:
 		optcode >= 154 and optcode <= 157 or\
 		optcode >= 160 and optcode <= 165
 
-# Helpers to clean up disassemble code, names explain them
-_print_raw = lambda x: print(*x, sep="\n", end="\n\n")
-_print_no_end = lambda x: print(x, end="")
+# Decompiles a CodeType to only its instructions
+def decompile_instructions_to_str(obj: CodeType) -> str:
+	output_str = ""
 
-# Decompiles 'codes' (CodeType's)
-def decompile(obj: CodeType, headers = None) -> None:
 	if hasattr(obj, "co_consts"):
-		consts = obj.co_consts
-		if headers is None:
-			next_headers = [obj.co_name]
-		else:
-			next_headers = headers + [obj.co_name]
-
-		if len(consts):
-			longest_const_type = max(consts, key = lambda const: 4 if hasattr(const, "co_code") else len(type(const).__name__))
-			longest_const_name = max(consts, key = lambda const: len(const.co_name) if hasattr(const, "co_code") else len(str(const)))
-
-			if hasattr(longest_const_type, "co_code"):
-				longest_const_type = 4
-			else:
-				longest_const_type = len(type(longest_const_type).__name__)
-
-			if hasattr(longest_const_name, "co_code"):
-				longest_const_name = len(longest_const_name.co_name)
-			else:
-				longest_const_name = len(str(longest_const_name))
-		else:
-			longest_const_type = 0
-			longest_const_name = 0
-
-		disassemblable = []
-		consts_length = len(consts)
-
-		if consts_length:
-			consts_strings = ["Constants (co_consts)"]
-
-			for i in range(consts_length):
-				const = consts[i]
-				if hasattr(const, "co_code"):
-					disassemblable.append(i)
-					consts_strings.append(f"{i:>02} -> {'Code':<{longest_const_type}} {const.co_name:>{longest_const_name}}")
-				else:
-					consts_strings.append(f"{i:>02} -> {type(const).__name__:<{longest_const_type}} {str(const):>{longest_const_name}}")
-
-			for i in disassemblable:
-				decompile(consts[i], next_headers)
-
-	if hasattr(obj, "co_varnames"):
-		varnames = obj.co_varnames
-
-		if len(varnames):
-			vars_strings = ["Variables (co_varnames)", *varnames]
-
-	if hasattr(obj, "co_freevars"):
-		freevars = obj.co_freevars
-
-		if len(freevars):
-			freevars_strings = ["Free Variables (co_freevars)", *freevars]
-
-	if hasattr(obj, "co_cellvars"):
-		cellvars = obj.co_cellvars
-
-		if len(cellvars):
-			cellvars_strings = ["Cell Variables (co_cellvars)", *cellvars]
-
-	if hasattr(obj, "co_names"):
-		names = obj.co_names
-
-		if len(names):
-			longest_names_name = len(max(names, key = lambda name: len(name)))
-			names_strings = ["Names (co_names)", *names]
-
-	if hasattr(obj, "co_code"):
-		if type(headers) is not list:
-			print("Disassemble of:", obj.co_name)
-		else:
-			print("Disassemble of:", " -> ".join(headers), "->", obj.co_name)
-
-		if "consts_strings" in locals():
-			_print_raw(consts_strings)
-
-		if "vars_strings" in locals():
-			_print_raw(vars_strings)
-
-		if "freevars_strings" in locals():
-			_print_raw(freevars_strings)
-
-		if "cellvars_strings" in locals():
-			_print_raw(cellvars_strings)
-
-		if "names_strings" in locals():
-			_print_raw(names_strings)
-
 		codes = obj.co_code
+		longest_instruction_name = len(opname[max(codes[::2], key = lambda code: len(opname[code]))])
+		longest_instruction_code =  len(str(max(codes[::2])))
+		longest_argument = len(str(max(codes[1::2])))
+		longest_instruction_number = len(str(len(codes)))
+
 		for i in range(0, len(codes), 2):
 			instruction = codes[i]
-			_print_no_end(f"\t[{instruction:>3}] {opname[instruction]:<16}")
-			if _needs_arguments(instruction):
-				_print_no_end(f" {codes[i + 1]}")
 
+			output_str += f"{i:<{longest_instruction_number}} {instruction:<{longest_instruction_code}}" +\
+				(f" {codes[i + 1]:<{longest_argument}}" if _needs_arguments(instruction) else "  ") +\
+				f" - {opname[instruction]}"
+
+			if instruction in (100, 90, 101):
+				output_str += " " * (longest_instruction_name - len(opname[instruction]) + 1)
 				if instruction == 100:
 					const_load_value = obj.co_consts[codes[i + 1]]
 					if hasattr(const_load_value, "co_code"):
@@ -122,17 +43,87 @@ def decompile(obj: CodeType, headers = None) -> None:
 					else:
 						const_name = str(obj.co_consts[codes[i + 1]])
 						const_type = type(obj.co_consts[codes[i + 1]]).__name__
-					_print_no_end(f" [{const_name:<{longest_const_name}} ({const_type:<{longest_const_type}})]")
+					output_str += f" {const_name} ({const_type})"
 				elif instruction == 90 or instruction == 101:
 					names_name = obj.co_names[codes[i + 1]]
-					_print_no_end(f" [{names_name:<{longest_names_name}}]")
-			print()
-		print()
+					output_str += f" \"{names_name}\""
 
-decompile(compile("""def test():
-	testA = 29
-	testB = 18
-	testC = testA * testB
-	return testC
+			output_str += "\n"
+		output_str += "\n"
 
-print(test())""", "<string>", "exec"))
+	return output_str.rstrip("\n")
+
+# Decompiles, recursively, a CodeType
+def decompile_to_str(obj: CodeType, headers = None) -> str:
+	output_str = ""
+
+	if hasattr(obj, "co_consts"):
+		consts = list(obj.co_consts)
+		if headers is None:
+			next_headers = [obj.co_name]
+		else:
+			next_headers = headers + [obj.co_name]
+
+		disassemblable = []
+
+		for i in range(len(consts)):
+			const = consts[i]
+			if hasattr(const, "co_code"):
+				disassemblable.append(i)
+				consts[i] = f"{const.co_name} (Code)"
+			else:
+				consts[i] = f"{str(const)} ({type(const).__name__})"
+
+		for i in disassemblable:
+			decompile_to_str(consts[i], next_headers)
+
+	if hasattr(obj, "co_code"):
+		if type(headers) is not list:
+			output_str += f"Disassemble of: {obj.co_name}\n"
+		else:
+			output_str += "Disassemble of:" + " -> ".join(headers) + f"->{obj.co_name}\n"
+
+		if len(consts):
+			output_str += "Consts\n\t" + "\n\t".join(consts) + "\n\n"
+
+		if hasattr(obj, "co_varnames") and len(obj.co_varnames):
+			output_str += "Vars\n\t" + "\n\t".join(obj.co_varnames) + "\n\n"
+
+		if hasattr(obj, "co_freevars") and len(obj.co_freevars):
+			output_str += "Frees\n\t" + "\n\t".join(obj.co_freevars) + "\n\n"
+
+		if hasattr(obj, "co_cellvars") and len(obj.co_cellvars):
+			output_str += "Cells\n\t" + "\n\t".join(obj.co_cellvars) + "\n\n"
+
+		if hasattr(obj, "co_names") and len(obj.co_names):
+			output_str += "Names\n\t" + "\n\t".join(obj.co_names) + "\n\n"
+
+		output_str += decompile_instructions_to_str(obj)
+
+	return output_str.rstrip("\n")
+
+# Decompiles 'codes' (CodeType's)
+def decompile(obj: CodeType, /, instructions_only: bool = False) -> str:
+	print(decompile_instructions_to_str(obj) if instructions_only else decompile_to_str(obj))
+
+# Creates a side by side of the code and bytecodes
+def generate_side_by_side(source_code: List[str]) -> str:
+	decompiled = decompile_instructions_to_str(compile("\n".join(source_code), "<string>", "exec")).split("\n")
+	longest_source_code_line = len(max(source_code, key = lambda code: len(code))) + 1
+	output_str = ""
+	i = 0
+
+	for src_code_line, decompiled_line in zip(source_code, decompiled):
+		output_str += f"{src_code_line:<{longest_source_code_line}}# {decompiled_line}\n"
+		i += 1
+
+	if i < len(decompiled):
+		while i < len(decompiled):
+			output_str += f"{' ':<{longest_source_code_line}}# {decompiled[i]}\n"
+			i += 1
+	elif i < len(source_code):
+		while i < len(source_code):
+			output_str += f"{source_code[i]}\n"
+			i += 1
+
+	return output_str.rstrip()
