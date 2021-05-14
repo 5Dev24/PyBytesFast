@@ -8,4 +8,5 @@ as well.
 ## Goal
 
 The goal of this project would be to be able to pass the source code
-to this project into it and get an optimized version out.
+to this project into it and get an optimized version out. Optimizes
+code at runtime.

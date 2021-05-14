@@ -1,6 +1,20 @@
-from opcode import opname
+from opcode import opname, hasjabs
 from types import CodeType
 from typing import List
+
+from structures import Instruction, Instructions, InstructionChain
+
+optcode_hints = {
+	"add_to_stack": {
+		111: 0
+	},
+	"take_from_stack": {
+		111: 1,
+		112: 1,
+		113: 1,
+
+	}
+}
 
 # Helper function
 # Checks if an optcode needs at least one argument
@@ -15,11 +29,40 @@ def _needs_arguments(optcode: int) -> bool:
 		optcode >= 154 and optcode <= 157 or\
 		optcode >= 160 and optcode <= 165
 
+def get_instruction_chain(obj: CodeType) -> InstructionChain:
+	chain = InstructionChain(Instructions([]), None, None)
+
+	def find_condition(instructions: List[Instruction], index: int):
+		
+
+	if hasattr(obj, "co_code"):
+		codes = obj.co_code
+
+		instructions: List[Instruction] = []
+
+		for i in range(0, len(codes), 2):
+			instructions.append(Instruction(codes[i], codes[i + 1], i * 2))
+
+		_get_chain(instructions)
+
+	return chain
+
+def _get_chain(instructions: List[Instruction]) -> InstructionChain:
+	
+	i = 0
+	while i < len(instructions):
+		instruction = instructions[i]
+
+		if instruction.id in hasjabs:
+			print(find_condition(instructions, i))
+
+		i += 1
+
 # Decompiles a CodeType to only its instructions
 def decompile_instructions_to_str(obj: CodeType) -> str:
 	output_str = ""
 
-	if hasattr(obj, "co_consts"):
+	if hasattr(obj, "co_code"):
 		codes = obj.co_code
 		longest_instruction_name = len(opname[max(codes[::2], key = lambda code: len(opname[code]))])
 		longest_instruction_code =  len(str(max(codes[::2])))
@@ -29,13 +72,13 @@ def decompile_instructions_to_str(obj: CodeType) -> str:
 		for i in range(0, len(codes), 2):
 			instruction = codes[i]
 
-			output_str += f"{i:<{longest_instruction_number}} {instruction:<{longest_instruction_code}}" +\
-				(f" {codes[i + 1]:<{longest_argument}}" if _needs_arguments(instruction) else "  ") +\
+			output_str += f"{i:<{longest_instruction_number}} {instruction:<{longest_instruction_code}} " +\
+				(f"{codes[i + 1]:<{longest_argument}}" if _needs_arguments(instruction) else f"{' ':<{longest_argument}}") +\
 				f" - {opname[instruction]}"
 
 			if instruction in (100, 90, 101):
 				output_str += " " * (longest_instruction_name - len(opname[instruction]) + 1)
-				if instruction == 100:
+				if instruction == 100 and hasattr(obj, "co_consts"):
 					const_load_value = obj.co_consts[codes[i + 1]]
 					if hasattr(const_load_value, "co_code"):
 						const_name = const_load_value.co_name

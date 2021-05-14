@@ -7,11 +7,11 @@ else:          # 6  100 0  - LOAD_CONST         50 (int)
                # 12 101 1  - LOAD_NAME          "print"
                # 14 100 1  - LOAD_CONST         a (str)
                # 16 131 1  - CALL_FUNCTION
-               # 18 1     - POP_TOP
+               # 18 1      - POP_TOP
                # 20 110 8  - JUMP_FORWARD
                # 22 101 1  - LOAD_NAME          "print"
                # 24 100 2  - LOAD_CONST         b (str)
                # 26 131 1  - CALL_FUNCTION
-               # 28 1     - POP_TOP
+               # 28 1      - POP_TOP
                # 30 100 3  - LOAD_CONST         None (NoneType)
-               # 32 83    - RETURN_VALUE
+               # 32 83     - RETURN_VALUE
