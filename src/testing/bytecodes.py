@@ -84,8 +84,8 @@ class Instruct:
 	def Reset():
 		Instruct.INDEX = 0
 
-	def __init__(self, optcode: int, arg: int = -1, /, give_id: bool = True):
-		self.optcode = optcode
+	def __init__(self, opcode: int, arg: int = -1, /, give_id: bool = True):
+		self.opcode = opcode
 		self.arg = arg
 		if give_id:
 			self.id = Instruct.INDEX
@@ -94,17 +94,17 @@ class Instruct:
 			self.id = -1
 
 	def __str__(self) -> str:
-		return f"{self.id:->3} {self.optcode:<3} {self.arg:>3}"
+		return f"{self.id:->3} {self.opcode:<3} {self.arg:>3}"
 
 	def __repr__(self) -> str:
-		return f"{self.id} {self.optcode} {self.arg}"
+		return f"{self.id} {self.opcode} {self.arg}"
 
 class Function:
 
 	def __init__(self, instructs: list, init_code: CodeType = None, debug: bool = False):
 		self.instructs = instructs
 		self.code = init_code
-		self.single_use_vars = self.constant_opts = self.dead_consts = self.dead_vars = None
+		self.single_use_vars = self.constant_ops = self.dead_consts = self.dead_vars = None
 		self.__debug = debug
 
 	def optimize(self):
@@ -120,21 +120,21 @@ class Function:
 
 	def __map(self):
 		single_use_vars = []
-		constant_opts = []
+		constant_ops = []
 		dead_consts = []
 		dead_vars = []
 
 		for instruct in self.instructs:
 
-			if (instruct.optcode >= 10 and instruct.optcode <= 11) or\
-				(instruct.optcode >= 19 and instruct.optcode <= 29) or\
-				(instruct.optcode >= 55 and instruct.optcode <= 57) or\
-				(instruct.optcode >= 62 and instruct.optcode <= 63) or\
-				(instruct.optcode >= 75 and instruct.optcode <= 76) or\
-				instruct.optcode in (59, 67): #TODO: Add support for COMPARE_OP to allow for boolean resolving and then JUMP support
+			if (instruct.opcode >= 10 and instruct.opcode <= 11) or\
+				(instruct.opcode >= 19 and instruct.opcode <= 29) or\
+				(instruct.opcode >= 55 and instruct.opcode <= 57) or\
+				(instruct.opcode >= 62 and instruct.opcode <= 63) or\
+				(instruct.opcode >= 75 and instruct.opcode <= 76) or\
+				instruct.opcode in (59, 67): #TODO: Add support for COMPARE_OP to allow for boolean resolving and then JUMP support
 
 				if self.__are_args_const(instruct, self.__prior(instruct, 2)):
-					constant_opts.append(instruct)
+					constant_ops.append(instruct)
 
 		if self.code is not None:
 			for loc in range(len(self.code.co_varnames)):
@@ -151,7 +151,7 @@ class Function:
 					dead_consts.append(con)
 
 		self.single_use_vars = tuple(single_use_vars)
-		self.constant_opts = tuple(constant_opts)
+		self.constant_ops = tuple(constant_ops)
 		self.dead_consts = tuple(dead_consts)
 		self.dead_vars = tuple(dead_vars)
 
@@ -160,7 +160,7 @@ class Function:
 		for var in self.single_use_vars:
 			store = self.__assignments(var)[0]
 			if store.id > 0 and (load_struct := self.__find(store.id - 1, self.__prior(store))) is not None:
-				if load_struct.optcode == 100:
+				if load_struct.opcode == 100:
 					singles_to_remove[var] = [store, self.__uses(var)[0], load_struct]
 					if self.__debug:
 						print(f"The single use of {self.code.co_varnames[var]} [{var}] will be replaced with a LOAD_CONST of {load_struct.arg} [{self.code.co_consts[load_struct.arg]}]")
@@ -176,86 +176,86 @@ class Function:
 
 		if self.code is not None:
 			modified = False
-			for instruct in self.constant_opts:
-				args_instructs = [i for i in self.__prior(instruct, 2)[:ValuesOnTheStack[instruct.optcode]] if i.optcode == 100]
+			for instruct in self.constant_ops:
+				args_instructs = [i for i in self.__prior(instruct, 2)[:ValuesOnTheStack[instruct.opcode]] if i.opcode == 100]
 				args = [self.code.co_consts[i.arg] for i in args_instructs]
-				optcode = instruct.optcode
+				opcode = instruct.opcode
 				value = None
 				value_set = False # Can't check if None as a return could be None
 
-				if optcode == 10: # UNARY_POSITIVE
+				if opcode == 10: # UNARY_POSITIVE
 					value = +args[0]
 					value_set = True
 
-				elif optcode == 11: # UNARY_NEGATIVE
+				elif opcode == 11: # UNARY_NEGATIVE
 					value = -args[0]
 					value_set = True
 
-				elif optcode == 19: # BINARY_POWER
+				elif opcode == 19: # BINARY_POWER
 					value = args[1] ** args[0]
 					value_set = True
 
-				elif optcode == 20: # BINARY MULTIPLY
+				elif opcode == 20: # BINARY MULTIPLY
 					value = args[1] * args[0]
 					value_set = True
 
-				elif optcode == 22: # BINARY_MODULO
+				elif opcode == 22: # BINARY_MODULO
 					value = args[1] % args[0]
 					value_set = True
 
-				elif optcode == 23: # BINARY_ADD
+				elif opcode == 23: # BINARY_ADD
 					value = args[1] + args[0]
 					value_set = True
 
-				elif optcode == 24: # BINARY_SUBTRACT
+				elif opcode == 24: # BINARY_SUBTRACT
 					value = args[1] - args[0]
 					value_set = True
 
-				elif optcode == 25: # BINARY_SUBSCR
+				elif opcode == 25: # BINARY_SUBSCR
 					value = args[1][args[0]]
 					value_set = True
 
-				elif optcode == 26: # BINARY_FLOOR_DIVIDE
+				elif opcode == 26: # BINARY_FLOOR_DIVIDE
 					value = args[1] // args[0]
 					value_set = True
 
-				elif optcode == 27: # BINARY_TRUE_DIVIDE
+				elif opcode == 27: # BINARY_TRUE_DIVIDE
 					value = args[1] / args[0]
 					value_set = True
 
-				elif optcode == 28: # INPLACE_FLOOR_DIVIDE
+				elif opcode == 28: # INPLACE_FLOOR_DIVIDE
 					args[1] //= args[0]
 
-				elif optcode == 29: # INPLACE_TRUE_DIVIDE
+				elif opcode == 29: # INPLACE_TRUE_DIVIDE
 					args[1] /= args[0]
 
-				elif optcode == 55: # INPLACE_ADD
+				elif opcode == 55: # INPLACE_ADD
 					args[1] += args[0]
 
-				elif optcode == 56: # INPLACE_SUBTRACT
+				elif opcode == 56: # INPLACE_SUBTRACT
 					args[1] -= args[0]
 
-				elif optcode == 57: # INPLACE_MULTIPLY
+				elif opcode == 57: # INPLACE_MULTIPLY
 					args[1] *= args[0]
 
-				elif optcode == 59: # INPLACE_MODULO
+				elif opcode == 59: # INPLACE_MODULO
 					args[1] %= args[0]
 
-				elif optcode == 62: # BINARY_LSHIFT
+				elif opcode == 62: # BINARY_LSHIFT
 					value = args[1] << args[0]
 					value_set = True
 
-				elif optcode == 63: # BINARY_RSHIFT
+				elif opcode == 63: # BINARY_RSHIFT
 					value = args[1] >> args[0]
 					value_set = True
 
-				elif optcode == 67: # INPLACE_POWER
+				elif opcode == 67: # INPLACE_POWER
 					args[1] **= args[0]
 
-				elif optcode == 75: # INPLACE_LSHIFT
+				elif opcode == 75: # INPLACE_LSHIFT
 					args[1] <<= args[0]
 
-				elif optcode == 76: # INPLACE_RSHIFT
+				elif opcode == 76: # INPLACE_RSHIFT
 					args[1] >>= args[0]
 
 				else:
@@ -263,7 +263,7 @@ class Function:
 
 				consts = list(self.code.co_consts)
 
-				for i in range(ValuesOnTheStack[optcode]):
+				for i in range(ValuesOnTheStack[opcode]):
 					consts[args_instructs[i].arg] = args[i]
 					self.__removeInstruct(instruct.id - 1)
 
@@ -277,12 +277,12 @@ class Function:
 					self.__replaceInstruct(instruct.id, Instruct(100, index, give_id = False))
 
 					if self.__debug:
-						print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with a {opname[100]} of {index} [{consts[index]}]")
+						print(f"The operation {opname[instruct.opcode]} has a static result and will be replaced with a {opname[100]} of {index} [{consts[index]}]")
 				else:
 					self.__removeInstruct(instruct.id)
 
 					if self.__debug:
-						print(f"The operation {opname[instruct.optcode]} has a static result and will be replaced with the constant {args[1]}")
+						print(f"The operation {opname[instruct.opcode]} has a static result and will be replaced with the constant {args[1]}")
 
 				self.code = self.code.replace(co_consts = tuple(consts))
 				modified = True
@@ -301,7 +301,7 @@ class Function:
 				for instruct in self.instructs:
 					if instruct is None:
 						continue
-					if instruct.arg > var and instruct.optcode in (124, 125):
+					if instruct.arg > var and instruct.opcode in (124, 125):
 						instruct.arg -= 1
 
 				del new_vars[var]
@@ -320,7 +320,7 @@ class Function:
 					if instruct is None:
 						continue
 
-					if instruct.optcode == 100 and instruct.arg > var:
+					if instruct.opcode == 100 and instruct.arg > var:
 						instruct.arg -= 1
 
 				del new_consts[var]
@@ -337,14 +337,14 @@ class Function:
 
 		output = []
 		for instruct in self.instructs:
-			output.append(instruct.optcode)
+			output.append(instruct.opcode)
 			output.append(instruct.arg)
 
 		return bytes(output)
 
 	def __are_args_const(self, operation: Instruct, instructs: list = None):
-		const_needed = ValuesOnTheStack[operation.optcode]
-		const_gotten = sum([1 for instruct in instructs[:const_needed] if instruct.optcode == 100])
+		const_needed = ValuesOnTheStack[operation.opcode]
+		const_gotten = sum([1 for instruct in instructs[:const_needed] if instruct.opcode == 100])
 		return const_gotten >= const_needed
 
 	def __removeInstruct(self, id: int):
@@ -399,19 +399,19 @@ class Function:
 		if instructs is None:
 			instructs = self.instructs
 
-		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.optcode in (100,)]
+		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.opcode in (100,)]
 
 	def __assignments(self, index: int, instructs: list = None):
 		if instructs is None:
 			instructs = self.instructs
 
-		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.optcode in (125,)]
+		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.opcode in (125,)]
 
 	def __uses(self, index: int, instructs: list = None):
 		if instructs is None:
 			instructs = self.instructs
 
-		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.optcode in (124,)]
+		return [instruct for instruct in instructs if instruct is not None and instruct.arg == index and instruct.opcode in (124,)]
 
 	def __prior(self, final: Instruct, seek: int = 0, instructs: list = None):
 		if instructs is None:
@@ -432,7 +432,7 @@ class Function:
 	def __str__(self):
 		output = ""
 		for instruct in self.instructs:
-			output += f"{instruct.id:<3} {instruct.optcode:>3} {instruct.arg:<3}\n"
+			output += f"{instruct.id:<3} {instruct.opcode:>3} {instruct.arg:<3}\n"
 		return output.rstrip("\n")
 
 def speeds(compiled: CodeType, runs: int = 512, tolerance: float = 5, refinements: int = 2) -> Tuple[float]:
@@ -605,7 +605,7 @@ def simple_dis(obj, headers = None):
 		print()
 
 def main():
-	debug: bool = False # Enabled debugging
+	debug: bool = True # Enabled debugging
 
 	# Speed calculation settings
 	tolerance: float = 0   # Percent with min/max to count

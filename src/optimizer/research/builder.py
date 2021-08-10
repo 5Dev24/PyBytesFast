@@ -21,11 +21,13 @@ def main() -> None:
 	rml  [line number]      Removes a line
 	mvc  [line number]      Moves the cursor to the beginning of a line
 	qc   [module/statement] Compiles the current code and displays any errors
-	save [file name]        Saves currently typed code to a file
+	save [file name] [y/n]  Saves currently typed code to a file, second argument sets if the code should be wrapped in a function first
 	load [file name]        Loads a saved file
- 	decompiled              Compiles then decompiles and shows the output
+ 	decompiled [y/n]        Compiles then decompiles and shows the output, argument sets if the code should be wrapped in a function first
 	clear                   Removes all lines
-	exit                    Closes the builder""")
+	exit                    Closes the builder
+
+Sleeping for 5 seconds""")
 		sleep(5)
 		return cursor_line, src_code
 
@@ -116,10 +118,13 @@ def main() -> None:
 		return cursor_line, src_code
 
 	def save_cmd(args: List[str], cursor_line: int, src_code: List[str]) -> Tuple[int, List[str]]:
-		if len(args) < 1:
-			print("Missing filename argument")
+		if len(args) < 2:
+			if len(args) < 1:
+				print("Missing filename argument")
+			else:
+				print("Missing optimizer setting")
 		else:
-			filename = saves_path + " ".join(args)
+			filename = saves_path + " ".join(args[:-1])
 			if path.exists(filename):
 				print("File already exists, override?")
 				answer = ""
@@ -132,7 +137,7 @@ def main() -> None:
 					return cursor_line, src_code
 
 			with open(filename, "w") as file:
-				file.write(decompiler.generate_side_by_side(src_code))
+				file.write(decompiler.generate_side_by_side(src_code, args[1].lower() in ("yes", "y", "true", "t")))
 			print(f"Saved code to {filename}")
 
 		sleep(2)
@@ -142,9 +147,14 @@ def main() -> None:
 		return 1, []
 
 	def decompiled_cmd(args: List[str], cursor_line: int, src_code: List[str]) -> Tuple[int, List[str]]:
-		system("clear")
-		print(decompiler.generate_side_by_side(src_code))
-		input("Press enter to exit")
+		if len(args) < 1:
+			print("Missing optimizer setting")
+			sleep(2)
+		else:
+			system("clear")
+			print(decompiler.generate_side_by_side(src_code, args[0].lower() in ("yes", "y", "true", "t")))
+			input("Press enter to exit")
+
 		return cursor_line, src_code
 
 	def load_cmd(args: List[str], cursor_line: int, src_code: List[str]) -> Tuple[int, List[str]]:
@@ -196,9 +206,9 @@ def main() -> None:
 				if i + 1 >= _cursor_line: # Only print up to current line
 					break
 
-				print(f"{i + 1:>0{line_number_padding}}: {code}")
+				print(f"{i + 1:>0{line_number_padding}}:\t{code}")
 
-			line = input(f"{_cursor_line:>0{line_number_padding}}: ")
+			line = input(f"{_cursor_line:>0{line_number_padding}}:\t")
 		except KeyboardInterrupt:
 			try:
 				print("\b\b  ") # Remove ^C
@@ -224,7 +234,7 @@ def main() -> None:
 			for _ in range(abs(diff)):
 				_src_code.append("")
 
-		_src_code[_cursor_line - 1] = line.expandtabs(4)
+		_src_code[_cursor_line - 1] = line.expandtabs()
 		_cursor_line += 1
 
 if __name__ == "__main__":
